@@ -7,3 +7,4 @@ repository = { workspace = true }
 license = { workspace = true }
 
 [dependencies]
+parquet = "57.2.0"
