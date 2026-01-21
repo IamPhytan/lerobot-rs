@@ -1,7 +1,6 @@
 pub mod lerobot_dataset;
 use std::env;
 use std::path::PathBuf;
-use std::sync;
 
 pub fn default_path() -> PathBuf {
     env::home_dir()
