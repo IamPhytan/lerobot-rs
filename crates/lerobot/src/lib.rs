@@ -10,6 +10,7 @@ pub fn default_path() -> PathBuf {
         .expect("Could not find home directory")
         .join(".cache")
         .join("huggingface")
+        .join("lerobot")
 }
 
 pub fn lerobot_home() -> PathBuf {
