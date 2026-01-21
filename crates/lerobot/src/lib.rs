@@ -1,6 +1,9 @@
+mod datasets;
 pub mod lerobot_dataset;
 use std::env;
 use std::path::PathBuf;
+
+pub use lerobot_dataset::LeRobotDataset;
 
 pub fn default_path() -> PathBuf {
     env::home_dir()

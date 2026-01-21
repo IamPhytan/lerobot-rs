@@ -6,7 +6,7 @@ fn main() {
         lerobot::lerobot_home().as_path()
     );
 
-    let dataset = lerobot::lerobot_dataset::LeRobotDataset::new("user/my_dataset", None);
+    let dataset = lerobot::LeRobotDataset::new("user/my_dataset", None, None, None, None, None);
     println!(
         "Loaded dataset of size {} with repo ID: {} and root {}",
         dataset.len(),
