@@ -10,6 +10,7 @@ pub struct LeRobotDatasetMetadata {
     revision: String,
     pub info: utils::DatasetInfo,
     pub stats: utils::DatasetStats,
+    pub tasks: polars::frame::DataFrame,
 }
 
 impl LeRobotDatasetMetadata {
@@ -18,12 +19,16 @@ impl LeRobotDatasetMetadata {
         let meta_dir = root.join("meta");
 
         // Info
-        let meta_info_path = meta_dir.join("info.json");
-        let info = utils::load_info(meta_info_path).expect("Error while reading dataset info");
+        let info =
+            utils::load_info(meta_dir.join("info.json")).expect("Error while reading dataset info");
 
         // Stats
-        let meta_stats_path = meta_dir.join("stats.json");
-        let stats = utils::load_stats(meta_stats_path).expect("Error while reading dataset stats");
+        let stats = utils::load_stats(meta_dir.join("stats.json"))
+            .expect("Error while reading dataset stats");
+
+        // Tasks
+        let tasks = utils::load_tasks(meta_dir.join("tasks.parquet"))
+            .expect("Error while reading dataset tasks");
 
         Self {
             repo_id: repo_id.to_string(),
@@ -31,6 +36,7 @@ impl LeRobotDatasetMetadata {
             revision: revision.to_string(),
             info,
             stats,
+            tasks,
         }
     }
 }

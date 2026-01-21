@@ -1,3 +1,4 @@
+use polars::{self as pl, io::SerReader, prelude::ParquetReader};
 use serde::Deserialize;
 use serde_json;
 use std::{collections::HashMap, error, fmt, fs::File, io, path::Path};
@@ -6,6 +7,7 @@ use std::{collections::HashMap, error, fmt, fs::File, io, path::Path};
 pub enum FileError {
     Io(io::Error),
     Json(serde_json::Error),
+    Polars(pl::error::PolarsError),
 }
 
 impl From<serde_json::Error> for FileError {
@@ -20,11 +22,18 @@ impl From<io::Error> for FileError {
     }
 }
 
+impl From<pl::error::PolarsError> for FileError {
+    fn from(err: pl::error::PolarsError) -> Self {
+        FileError::Polars(err)
+    }
+}
+
 impl fmt::Display for FileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FileError::Io(e) => write!(f, "I/O error: {}", e),
             FileError::Json(e) => write!(f, "JSON error: {}", e),
+            FileError::Polars(e) => write!(f, "Polars error: {}", e),
         }
     }
 }
@@ -34,6 +43,7 @@ impl error::Error for FileError {
         match self {
             FileError::Io(e) => Some(e),
             FileError::Json(e) => Some(e),
+            FileError::Polars(e) => Some(e),
         }
     }
 }
@@ -120,4 +130,13 @@ pub fn load_stats<P: AsRef<Path>>(path: P) -> Result<DatasetStats, FileError> {
     let reader = io::BufReader::new(file);
 
     Ok(serde_json::from_reader(reader)?)
+}
+
+pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
+    println!("Reading from file: {:?}", path.as_ref());
+    let file = File::open(path)?;
+
+    let df = pl::prelude::ParquetReader::new(file).finish()?;
+
+    Ok(df)
 }

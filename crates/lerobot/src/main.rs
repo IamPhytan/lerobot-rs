@@ -13,4 +13,9 @@ fn main() {
         dataset.repo_id,
         dataset.root().display()
     );
+
+    println!("Dataset metadata: {:?}", dataset.meta.info);
+    println!("Dataset statistics: {:?}", dataset.meta.stats);
+    println!("Dataset tasks: {}", dataset.meta.tasks);
+    // println!("Dataset episodes: {:?}", dataset.meta.episodes);
 }
