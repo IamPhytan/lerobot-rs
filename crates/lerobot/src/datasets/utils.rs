@@ -45,6 +45,35 @@ impl error::Error for FileError {
 }
 
 #[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum DatasetFeatureNames {
+    Map(HashMap<String, Vec<String>>),
+    Vec(Vec<String>),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct VideoInfo {
+    #[serde(rename = "video.fps")]
+    video_fps: f32,
+    #[serde(rename = "video.codec")]
+    video_codec: String,
+    #[serde(rename = "video.pix_fmt")]
+    video_pix_fmt: String,
+    #[serde(rename = "video.is_depth_map")]
+    video_is_depth_map: bool,
+    has_audio: bool,
+}
+
+#[derive(Deserialize, Debug)]
+struct DatasetFeature {
+    dtype: String,
+    shape: Vec<usize>,
+    names: Option<DatasetFeatureNames>,
+    fps: Option<f32>,
+    video_info: Option<VideoInfo>,
+}
+
+#[derive(Deserialize, Debug)]
 pub struct DatasetInfo {
     codebase_version: String,
     robot_type: String,
@@ -52,10 +81,13 @@ pub struct DatasetInfo {
     total_frames: usize,
     total_tasks: usize,
     chunks_size: usize,
+    data_files_size_in_mb: u32,
+    video_files_size_in_mb: u32,
     fps: u32,
     splits: HashMap<String, String>,
     data_path: String,
     video_path: String,
+    features: HashMap<String, DatasetFeature>,
 }
 
 pub fn load_info<P: AsRef<Path>>(path: P) -> Result<DatasetInfo, FileError> {
