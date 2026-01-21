@@ -1,12 +1,6 @@
 use serde::Deserialize;
 use serde_json;
-use std::{
-    collections::HashMap,
-    error, fmt,
-    fs::File,
-    io::{self, BufReader},
-    path::Path,
-};
+use std::{collections::HashMap, error, fmt, fs::File, io, path::Path};
 
 #[derive(Debug)]
 pub enum FileError {
@@ -52,7 +46,7 @@ enum DatasetFeatureNames {
 }
 
 #[derive(Deserialize, Debug)]
-pub struct VideoInfo {
+struct VideoInfo {
     #[serde(rename = "video.fps")]
     video_fps: f32,
     #[serde(rename = "video.codec")]
@@ -93,7 +87,37 @@ pub struct DatasetInfo {
 pub fn load_info<P: AsRef<Path>>(path: P) -> Result<DatasetInfo, FileError> {
     println!("Reading from file: {:?}", path.as_ref());
     let file = File::open(path)?;
-    let reader = BufReader::new(file);
+    let reader = io::BufReader::new(file);
+
+    Ok(serde_json::from_reader(reader)?)
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum DatasetFeatureStatValue {
+    F64(f64),
+    Bool(bool),
+}
+
+#[derive(Deserialize, Debug)]
+struct DatasetFeatureStats {
+    min: Vec<DatasetFeatureStatValue>,
+    max: Vec<DatasetFeatureStatValue>,
+    mean: Vec<f64>,
+    std: Vec<f64>,
+    count: Vec<usize>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DatasetStats {
+    #[serde(flatten)]
+    pub features: HashMap<String, DatasetFeatureStats>,
+}
+
+pub fn load_stats<P: AsRef<Path>>(path: P) -> Result<DatasetStats, FileError> {
+    println!("Reading from file: {:?}", path.as_ref());
+    let file = File::open(path)?;
+    let reader = io::BufReader::new(file);
 
     Ok(serde_json::from_reader(reader)?)
 }

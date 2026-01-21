@@ -8,19 +8,29 @@ pub struct LeRobotDatasetMetadata {
     repo_id: String,
     root: PathBuf,
     revision: String,
+    pub info: utils::DatasetInfo,
+    pub stats: utils::DatasetStats,
 }
 
 impl LeRobotDatasetMetadata {
     pub fn new(repo_id: &str, root: PathBuf, revision: &str) -> Self {
-        let meta_info_path = root.join("meta/info.json");
-        let info = utils::load_info(meta_info_path).expect("Error while reading info file");
+        // Load metadata
+        let meta_dir = root.join("meta");
 
-        println!("{:?}", info);
+        // Info
+        let meta_info_path = meta_dir.join("info.json");
+        let info = utils::load_info(meta_info_path).expect("Error while reading dataset info");
+
+        // Stats
+        let meta_stats_path = meta_dir.join("stats.json");
+        let stats = utils::load_stats(meta_stats_path).expect("Error while reading dataset stats");
 
         Self {
             repo_id: repo_id.to_string(),
             root,
             revision: revision.to_string(),
+            info,
+            stats,
         }
     }
 }
