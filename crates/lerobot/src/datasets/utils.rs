@@ -1,7 +1,24 @@
-use polars::{self as pl, io::SerReader, prelude::ParquetReader};
+use glob;
+use polars::{
+    self as pl,
+    io::SerReader,
+    prelude::{ParquetReader, PlPath},
+};
 use serde::Deserialize;
 use serde_json;
 use std::{collections::HashMap, error, fmt, fs::File, io, path::Path};
+
+trait PathGlob {
+    fn glob(&self, pattern: &str) -> glob::Paths;
+}
+
+impl PathGlob for Path {
+    fn glob(&self, pattern: &str) -> glob::Paths {
+        let path_pattern = self.join(pattern);
+        glob::glob(path_pattern.to_str().expect("Invalid UTF-8 in path"))
+            .expect("Invalid glob pattern")
+    }
+}
 
 #[derive(Debug)]
 pub enum FileError {
@@ -134,6 +151,21 @@ pub fn load_stats<P: AsRef<Path>>(path: P) -> Result<DatasetStats, FileError> {
 
 pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
     println!("Reading from file: {:?}", path.as_ref());
+    let file = File::open(path)?;
+
+    let df = pl::prelude::ParquetReader::new(file).finish()?;
+
+    Ok(df)
+}
+
+pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
+    println!("Reading from file: {:?}", path.as_ref());
+
+    let files = path.as_ref().glob("*/*.parquet");
+
+    println!("{:?}", files);
+    todo!("Implement episode file loading");
+
     let file = File::open(path)?;
 
     let df = pl::prelude::ParquetReader::new(file).finish()?;

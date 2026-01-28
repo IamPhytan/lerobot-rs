@@ -1130,6 +1130,7 @@ dependencies = [
 name = "lerobot"
 version = "0.1.0"
 dependencies = [
+ "glob",
  "polars",
  "serde",
  "serde_json",

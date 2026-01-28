@@ -30,6 +30,10 @@ impl LeRobotDatasetMetadata {
         let tasks = utils::load_tasks(meta_dir.join("tasks.parquet"))
             .expect("Error while reading dataset tasks");
 
+        // Episodes
+        let episodes = utils::load_episodes(meta_dir.join("episodess"))
+            .expect("Error while reading dataset episodes");
+
         Self {
             repo_id: repo_id.to_string(),
             root,
