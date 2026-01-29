@@ -6,6 +6,7 @@ use polars::{
 };
 use serde::Deserialize;
 use serde_json;
+use serde_json::Value;
 use std::{collections::HashMap, error, fmt, fs::File, io, path::Path};
 
 trait PathGlob {
@@ -120,18 +121,11 @@ pub fn load_info<P: AsRef<Path>>(path: P) -> Result<DatasetInfo, FileError> {
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(untagged)]
-enum DatasetFeatureStatValue {
-    F64(f64),
-    Bool(bool),
-}
-
-#[derive(Deserialize, Debug)]
-struct DatasetFeatureStats {
-    min: Vec<DatasetFeatureStatValue>,
-    max: Vec<DatasetFeatureStatValue>,
-    mean: Vec<f64>,
-    std: Vec<f64>,
+pub struct DatasetFeatureStats {
+    min: Vec<Value>,
+    max: Vec<Value>,
+    mean: Vec<Value>,
+    std: Vec<Value>,
     count: Vec<usize>,
 }
 
