@@ -105,7 +105,7 @@ pub struct DatasetInfo {
     chunks_size: usize,
     data_files_size_in_mb: u32,
     video_files_size_in_mb: u32,
-    fps: u32,
+    fps: f32,
     splits: HashMap<String, String>,
     data_path: String,
     video_path: String,
