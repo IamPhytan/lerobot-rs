@@ -1,9 +1,5 @@
 use glob;
-use polars::{
-    self as pl,
-    io::SerReader,
-    prelude::{ParquetReader, PlPath},
-};
+use polars::{self as pl, io::SerReader, prelude::ParquetReader};
 use serde::Deserialize;
 use serde_json;
 use serde_json::Value;
@@ -147,7 +143,7 @@ pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileE
     println!("Reading from file: {:?}", path.as_ref());
     let file = File::open(path)?;
 
-    let df = pl::prelude::ParquetReader::new(file).finish()?;
+    let df = ParquetReader::new(file).finish()?;
 
     Ok(df)
 }
@@ -158,11 +154,18 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
     let files = path.as_ref().glob("*/*.parquet");
 
     println!("{:?}", files);
+
+    for file in files {
+        println!("{:?}", file);
+    }
+
+    // files.map(|p| ParquetReader::new(reader))
+
     todo!("Implement episode file loading");
 
-    let file = File::open(path)?;
+    // let file = File::open(path)?;
 
-    let df = pl::prelude::ParquetReader::new(file).finish()?;
+    // let df = ParquetReader::new(file).finish()?;
 
-    Ok(df)
+    // Ok(df)
 }
