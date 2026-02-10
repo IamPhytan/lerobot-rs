@@ -104,19 +104,19 @@ struct DatasetFeature {
 
 #[derive(Deserialize, Debug)]
 pub struct DatasetInfo {
-    codebase_version: String,
-    robot_type: String,
-    total_episodes: usize,
-    total_frames: usize,
-    total_tasks: usize,
-    chunks_size: usize,
-    data_files_size_in_mb: u32,
-    video_files_size_in_mb: u32,
-    fps: f32,
-    splits: HashMap<String, String>,
-    data_path: String,
-    video_path: String,
-    features: HashMap<String, DatasetFeature>,
+    pub codebase_version: String,
+    pub robot_type: String,
+    pub total_episodes: usize,
+    pub total_frames: usize,
+    pub total_tasks: usize,
+    pub chunks_size: usize,
+    pub data_files_size_in_mb: u32,
+    pub video_files_size_in_mb: u32,
+    pub fps: f32,
+    pub splits: HashMap<String, String>,
+    pub data_path: String,
+    pub video_path: String,
+    pub features: HashMap<String, DatasetFeature>,
 }
 
 pub fn load_info<P: AsRef<Path>>(path: P) -> Result<DatasetInfo, FileError> {

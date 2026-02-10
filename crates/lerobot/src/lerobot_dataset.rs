@@ -45,6 +45,54 @@ impl LeRobotDatasetMetadata {
             episodes,
         }
     }
+
+    fn url_root(&self) -> String {
+        format!("hf://datasets/{}", &self.repo_id.clone())
+    }
+
+    fn _version(&self) -> &str {
+        &self.info.codebase_version
+    }
+
+    fn data_path(&self) -> &str {
+        &self.info.data_path
+    }
+
+    fn video_path(&self) -> Option<&str> {
+        Some(&self.info.video_path.as_str())
+    }
+
+    fn robot_type(&self) -> Option<&str> {
+        Some(&self.info.robot_type.as_str())
+    }
+
+    fn fps(&self) -> Option<f32> {
+        Some(self.info.fps)
+    }
+
+    fn total_episodes(&self) -> usize {
+        self.info.total_episodes
+    }
+
+    fn total_frames(&self) -> usize {
+        self.info.total_frames
+    }
+
+    fn total_tasks(&self) -> usize {
+        self.info.total_tasks
+    }
+
+    fn chunks_size(&self) -> usize {
+        self.info.chunks_size
+    }
+
+    fn data_files_size_in_mb(&self) -> u32 {
+        self.info.data_files_size_in_mb
+    }
+
+    fn video_files_size_in_mb(&self) -> u32 {
+        self.info.video_files_size_in_mb
+    }
 }
 
 struct Episode {}
