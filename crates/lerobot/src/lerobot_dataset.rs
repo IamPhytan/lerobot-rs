@@ -11,6 +11,7 @@ pub struct LeRobotDatasetMetadata {
     pub info: utils::DatasetInfo,
     pub stats: utils::DatasetStats,
     pub tasks: polars::frame::DataFrame,
+    pub episodes: polars::frame::DataFrame,
 }
 
 impl LeRobotDatasetMetadata {
@@ -31,7 +32,7 @@ impl LeRobotDatasetMetadata {
             .expect("Error while reading dataset tasks");
 
         // Episodes
-        let episodes = utils::load_episodes(meta_dir.join("episodess"))
+        let episodes = utils::load_episodes(meta_dir.join("episodes"))
             .expect("Error while reading dataset episodes");
 
         Self {
@@ -41,6 +42,7 @@ impl LeRobotDatasetMetadata {
             info,
             stats,
             tasks,
+            episodes,
         }
     }
 }

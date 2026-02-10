@@ -1,9 +1,11 @@
 use glob;
+use polars::lazy::prelude::LazyFrame;
+use polars::prelude::{UnionArgs, UnionOptions};
 use polars::{self as pl, io::SerReader, prelude::ParquetReader};
 use serde::Deserialize;
 use serde_json;
 use serde_json::Value;
-use std::{collections::HashMap, error, fmt, fs::File, io, path::Path};
+use std::{collections::HashMap, error, fmt, fs::File, io, path::Path, path::PathBuf};
 
 trait PathGlob {
     fn glob(&self, pattern: &str) -> glob::Paths;
@@ -22,6 +24,7 @@ pub enum FileError {
     Io(io::Error),
     Json(serde_json::Error),
     Polars(pl::error::PolarsError),
+    Glob(glob::GlobError),
 }
 
 impl From<serde_json::Error> for FileError {
@@ -42,12 +45,19 @@ impl From<pl::error::PolarsError> for FileError {
     }
 }
 
+impl From<glob::GlobError> for FileError {
+    fn from(err: glob::GlobError) -> Self {
+        FileError::Glob(err)
+    }
+}
+
 impl fmt::Display for FileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FileError::Io(e) => write!(f, "I/O error: {}", e),
             FileError::Json(e) => write!(f, "JSON error: {}", e),
             FileError::Polars(e) => write!(f, "Polars error: {}", e),
+            FileError::Glob(e) => write!(f, "Glob error: {}", e),
         }
     }
 }
@@ -58,6 +68,7 @@ impl error::Error for FileError {
             FileError::Io(e) => Some(e),
             FileError::Json(e) => Some(e),
             FileError::Polars(e) => Some(e),
+            FileError::Glob(e) => Some(e),
         }
     }
 }
@@ -151,21 +162,25 @@ pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileE
 pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
     println!("Reading from file: {:?}", path.as_ref());
 
-    let files = path.as_ref().glob("*/*.parquet");
+    let files = path
+        .as_ref()
+        .glob("**/*.parquet")
+        .map(|p| p.expect("Error reading file {p}"))
+        .collect::<Vec<PathBuf>>();
 
-    println!("{:?}", files);
+    let episodes = files
+        .iter()
+        .map(|fpath| {
+            LazyFrame::scan_parquet(
+                polars::prelude::PlPath::new(fpath.to_str().expect("Polars Path error")),
+                Default::default(),
+            )
+            .map_err(FileError::from)
+            .expect(format!("Error while scanning parquet file {:?}", fpath).as_str())
+        })
+        .collect::<Vec<LazyFrame>>();
 
-    for file in files {
-        println!("{:?}", file);
-    }
+    let all_episodes = pl::prelude::concat(episodes, UnionArgs::default())?.collect()?;
 
-    // files.map(|p| ParquetReader::new(reader))
-
-    todo!("Implement episode file loading");
-
-    // let file = File::open(path)?;
-
-    // let df = ParquetReader::new(file).finish()?;
-
-    // Ok(df)
+    Ok(all_episodes)
 }

@@ -22,7 +22,7 @@ fn main() {
             println!("Dataset metadata: {:?}", dataset.meta.info);
             println!("Dataset statistics: {:?}", dataset.meta.stats);
             println!("Dataset tasks: {}", dataset.meta.tasks);
-            // println!("Dataset episodes: {:?}", dataset.meta.episodes);
+            println!("Dataset episodes: {:?}", dataset.meta.episodes);
         }
     }
 }
