@@ -1,4 +1,5 @@
 use crate::datasets::utils;
+use polars::prelude::{IntoLazy, OptFlags, col, lit};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -92,6 +93,39 @@ impl LeRobotDatasetMetadata {
 
     fn video_files_size_in_mb(&self) -> u32 {
         self.info.video_files_size_in_mb
+    }
+
+    pub fn get_task_index(&self, task: &str) -> Option<usize> {
+        let filtered_tasks = self
+            .tasks
+            .clone()
+            .lazy()
+            .map(
+                |f| {
+                    let hello = f.column("task").iter().map(|&val| println!("{val:?}"));
+                    Ok(f)
+                },
+                OptFlags::all(),
+                None,
+                None,
+            )
+            .filter(col("task").eq(lit(task)))
+            .select([col("task_index")])
+            .limit(1)
+            .collect()
+            .expect(format!("Problem finding task: {}", task).as_str());
+
+        if filtered_tasks.height() == 0 {
+            return None;
+        }
+
+        filtered_tasks
+            .column("task_index")
+            .expect("No column 'task_index'")
+            .u64()
+            .expect("Task index cannot be converted to a u64")
+            .get(0)
+            .map(|x| x as usize)
     }
 }
 

@@ -1,7 +1,7 @@
 use glob;
 use polars::lazy::prelude::LazyFrame;
-use polars::prelude::{UnionArgs, UnionOptions};
-use polars::{self as pl, io::SerReader, prelude::ParquetReader};
+use polars::prelude::{DataType, PlPath, UnionArgs, col, concat};
+use polars::{self as pl, io::SerReader};
 use serde::Deserialize;
 use serde_json;
 use serde_json::Value;
@@ -25,6 +25,7 @@ pub enum FileError {
     Json(serde_json::Error),
     Polars(pl::error::PolarsError),
     Glob(glob::GlobError),
+    PathEncoding,
 }
 
 impl From<serde_json::Error> for FileError {
@@ -58,6 +59,7 @@ impl fmt::Display for FileError {
             FileError::Json(e) => write!(f, "JSON error: {}", e),
             FileError::Polars(e) => write!(f, "Polars error: {}", e),
             FileError::Glob(e) => write!(f, "Glob error: {}", e),
+            FileError::PathEncoding => write!(f, "Path is not valid UTF-8"),
         }
     }
 }
@@ -69,6 +71,7 @@ impl error::Error for FileError {
             FileError::Json(e) => Some(e),
             FileError::Polars(e) => Some(e),
             FileError::Glob(e) => Some(e),
+            FileError::PathEncoding => None,
         }
     }
 }
@@ -152,9 +155,15 @@ pub fn load_stats<P: AsRef<Path>>(path: P) -> Result<DatasetStats, FileError> {
 
 pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
     println!("Reading from file: {:?}", path.as_ref());
-    let file = File::open(path)?;
 
-    let df = ParquetReader::new(file).finish()?;
+    let fpath = path.as_ref().to_str().ok_or(FileError::PathEncoding)?;
+
+    let df = LazyFrame::scan_parquet(PlPath::new(fpath), Default::default())?
+        .select([
+            col("task_index").cast(DataType::UInt64),
+            col("__index_level_0__").alias("task"),
+        ])
+        .collect()?;
 
     Ok(df)
 }
@@ -172,7 +181,7 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
         .iter()
         .map(|fpath| {
             LazyFrame::scan_parquet(
-                polars::prelude::PlPath::new(fpath.to_str().expect("Polars Path error")),
+                PlPath::new(fpath.to_str().expect("Polars Path error")),
                 Default::default(),
             )
             .map_err(FileError::from)
@@ -180,7 +189,7 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
         })
         .collect::<Vec<LazyFrame>>();
 
-    let all_episodes = pl::prelude::concat(episodes, UnionArgs::default())?.collect()?;
+    let all_episodes = concat(episodes, UnionArgs::default())?.collect()?;
 
     Ok(all_episodes)
 }
