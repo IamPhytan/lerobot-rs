@@ -34,6 +34,7 @@ fn main() {
             episode_index,
             batch_size,
             num_workers,
+            mode,
         } => {
             let dataset =
                 lerobot::LeRobotDataset::new(repo.repo_id.as_str(), None, None, None, None, None);

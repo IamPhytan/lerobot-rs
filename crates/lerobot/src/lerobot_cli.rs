@@ -1,10 +1,17 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 pub struct RepoArgs {
     /// Dataset Repository identifier
     #[arg(long)]
     pub repo_id: String,
+}
+
+#[cfg(feature = "dataset-viz")]
+#[derive(Copy, Clone, Debug, ValueEnum)]
+pub enum DatasetVizMode {
+    Local,
+    Distant,
 }
 
 #[derive(Subcommand, Debug)]
@@ -29,9 +36,16 @@ pub enum Command {
         #[arg(long, default_value_t = 32)]
         batch_size: u32,
 
-        ///Number of processes of Dataloader for loading the data.
+        /// Number of processes of Dataloader for loading the data.
         #[arg(long, default_value_t = 4)]
         num_workers: u32,
+
+        /// Mode of viewing between 'local' or 'distant'.
+        /// 'local' requires data to be on a local machine. It spawns a viewer to visualize the data locally.
+        /// 'distant' creates a server on the distant machine where the data is stored.
+        /// Visualize the data by connecting to the server with `rerun ws://localhost:PORT` on the local machine.
+        #[arg(long, default_value = "local")]
+        mode: DatasetVizMode,
     },
 }
 
