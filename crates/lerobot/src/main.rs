@@ -23,6 +23,17 @@ fn main() {
             println!("Dataset statistics: {:?}", dataset.meta.stats);
             println!("Dataset tasks: {}", dataset.meta.tasks);
             println!("Dataset episodes: {:?}", dataset.meta.episodes);
+
+            let task_index = dataset.meta.get_task_index("put the white mug on the left plate and put the yellow and white mug on the right plate");
+
+            println!("{task_index:?}");
+        }
+        lerobot_cli::Command::DatasetViz {
+            repo,
+            episode_index,
+        } => {
+            let dataset =
+                lerobot::LeRobotDataset::new(repo.repo_id.as_str(), None, None, None, None, None);
         }
     }
 }
