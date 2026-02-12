@@ -28,12 +28,16 @@ fn main() {
 
             println!("{task_index:?}");
         }
+        #[cfg(feature = "dataset-viz")]
         lerobot_cli::Command::DatasetViz {
             repo,
             episode_index,
+            batch_size,
+            num_workers,
         } => {
             let dataset =
                 lerobot::LeRobotDataset::new(repo.repo_id.as_str(), None, None, None, None, None);
+            println!("{:?}", dataset);
         }
     }
 }

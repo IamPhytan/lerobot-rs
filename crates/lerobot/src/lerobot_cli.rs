@@ -22,8 +22,8 @@ pub enum Command {
         repo: RepoArgs,
 
         /// Episode to visualize
-        #[arg(long, value_parser = clap::value_parser!(usize).range(0..))]
-        episode_index: usize,
+        #[arg(long, value_parser = clap::value_parser!(u64).range(0..))]
+        episode_index: u64,
 
         /// Batch size loaded by DataLoader.
         #[arg(long, default_value_t = 32)]

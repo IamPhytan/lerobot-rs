@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Debug)]
 pub struct LeRobotDatasetMetadata {
     repo_id: String,
     root: PathBuf,
@@ -129,8 +130,10 @@ impl LeRobotDatasetMetadata {
     }
 }
 
+#[derive(Debug)]
 struct Episode {}
 
+#[derive(Debug)]
 pub struct LeRobotDataset {
     pub repo_id: String,
     pub meta: LeRobotDatasetMetadata,
