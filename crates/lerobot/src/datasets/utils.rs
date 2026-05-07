@@ -76,14 +76,14 @@ impl error::Error for FileError {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 #[serde(untagged)]
-enum DatasetFeatureNames {
+pub enum DatasetFeatureNames {
     Map(HashMap<String, Vec<String>>),
     Vec(Vec<String>),
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 struct VideoInfo {
     #[serde(rename = "video.fps")]
     video_fps: f32,
@@ -96,13 +96,13 @@ struct VideoInfo {
     has_audio: bool,
 }
 
-#[derive(Deserialize, Debug)]
-struct DatasetFeature {
-    dtype: String,
-    shape: Vec<usize>,
-    names: Option<DatasetFeatureNames>,
-    fps: Option<f32>,
-    video_info: Option<VideoInfo>,
+#[derive(Deserialize, Debug, Clone)]
+pub struct DatasetFeature {
+    pub dtype: String,
+    pub shape: Vec<usize>,
+    pub names: Option<DatasetFeatureNames>,
+    pub fps: Option<f32>,
+    pub video_info: Option<VideoInfo>,
 }
 
 #[derive(Deserialize, Debug)]

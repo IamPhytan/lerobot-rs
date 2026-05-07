@@ -77,6 +77,52 @@ impl LeRobotDatasetMetadata {
         Some(self.info.fps)
     }
 
+    fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
+        Some(self.info.features.clone())
+    }
+
+    fn get_keys_by_filter(&self, filter_values: Vec<&str>) -> Vec<String> {
+        self.features()
+            .unwrap_or(HashMap::new())
+            .iter()
+            .filter_map(|(key, ft)| {
+                if filter_values.contains(&ft.dtype.as_str()) {
+                    Some(key.clone())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+    }
+
+    fn image_keys(&self) -> Vec<String> {
+        self.get_keys_by_filter(vec!["image"])
+    }
+
+    fn video_keys(&self) -> Vec<String> {
+        self.get_keys_by_filter(vec!["video"])
+    }
+
+    fn camera_keys(&self) -> Vec<String> {
+        self.get_keys_by_filter(vec!["video", "image"])
+    }
+
+    fn names(&self) -> HashMap<String, Option<utils::DatasetFeatureNames>> {
+        self.features()
+            .unwrap_or(HashMap::new())
+            .iter()
+            .map(|(key, ft)| (key.clone(), ft.names.clone()))
+            .collect()
+    }
+
+    fn shapes(&self) -> HashMap<String, Vec<usize>> {
+        self.features()
+            .unwrap_or(HashMap::new())
+            .iter()
+            .map(|(key, ft)| (key.clone(), ft.shape.clone()))
+            .collect()
+    }
+
     fn total_episodes(&self) -> usize {
         self.info.total_episodes
     }
@@ -108,7 +154,7 @@ impl LeRobotDatasetMetadata {
             .lazy()
             .map(
                 |f| {
-                    let hello = f.column("task").iter().map(|&val| println!("{val:?}"));
+                    let _ = f.column("task").iter().map(|&val| println!("{val:?}"));
                     Ok(f)
                 },
                 OptFlags::all(),
