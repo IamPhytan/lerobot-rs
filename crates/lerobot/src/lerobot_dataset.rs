@@ -11,9 +11,10 @@ pub struct LeRobotDatasetMetadata {
     root: PathBuf,
     revision: String,
     pub info: utils::DatasetInfo,
-    pub stats: utils::DatasetStats,
     pub tasks: polars::frame::DataFrame,
+    pub subtasks: Option<polars::frame::DataFrame>,
     pub episodes: polars::frame::DataFrame,
+    pub stats: utils::DatasetStats,
 }
 
 impl LeRobotDatasetMetadata {
@@ -25,26 +26,30 @@ impl LeRobotDatasetMetadata {
         let info =
             utils::load_info(meta_dir.join("info.json")).expect("Error while reading dataset info");
 
-        // Stats
-        let stats = utils::load_stats(meta_dir.join("stats.json"))
-            .expect("Error while reading dataset stats");
-
         // Tasks
         let tasks = utils::load_tasks(meta_dir.join("tasks.parquet"))
             .expect("Error while reading dataset tasks");
 
+        // Subtasks
+        let subtasks = utils::load_subtasks(meta_dir.join("subtasks.parquet"));
+
         // Episodes
         let episodes = utils::load_episodes(meta_dir.join("episodes"))
             .expect("Error while reading dataset episodes");
+
+        // Stats
+        let stats = utils::load_stats(meta_dir.join("stats.json"))
+            .expect("Error while reading dataset stats");
 
         Self {
             repo_id: repo_id.to_string(),
             root,
             revision: revision.to_string(),
             info,
-            stats,
             tasks,
+            subtasks,
             episodes,
+            stats,
         }
     }
 

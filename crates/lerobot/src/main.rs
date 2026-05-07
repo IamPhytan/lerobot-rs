@@ -22,6 +22,7 @@ fn main() {
             println!("Dataset metadata: {:?}", dataset.meta.info);
             println!("Dataset statistics: {:?}", dataset.meta.stats);
             println!("Dataset tasks: {}", dataset.meta.tasks);
+            println!("Dataset subtasks: {:?}", dataset.meta.subtasks);
             println!("Dataset episodes: {:?}", dataset.meta.episodes);
 
             let task_index = dataset.meta.get_task_index("put the white mug on the left plate and put the yellow and white mug on the right plate");

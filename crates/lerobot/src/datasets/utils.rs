@@ -130,29 +130,6 @@ pub fn load_info<P: AsRef<Path>>(path: P) -> Result<DatasetInfo, FileError> {
     Ok(serde_json::from_reader(reader)?)
 }
 
-#[derive(Deserialize, Debug)]
-pub struct DatasetFeatureStats {
-    min: Vec<Value>,
-    max: Vec<Value>,
-    mean: Vec<Value>,
-    std: Vec<Value>,
-    count: Vec<usize>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct DatasetStats {
-    #[serde(flatten)]
-    pub features: HashMap<String, DatasetFeatureStats>,
-}
-
-pub fn load_stats<P: AsRef<Path>>(path: P) -> Result<DatasetStats, FileError> {
-    println!("Reading from file: {:?}", path.as_ref());
-    let file = File::open(path)?;
-    let reader = io::BufReader::new(file);
-
-    Ok(serde_json::from_reader(reader)?)
-}
-
 pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
     println!("Reading from file: {:?}", path.as_ref());
 
@@ -166,6 +143,25 @@ pub fn load_tasks<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileE
         .collect()?;
 
     Ok(df)
+}
+
+pub fn load_subtasks<P: AsRef<Path>>(path: P) -> Option<pl::frame::DataFrame> {
+    println!("Reading from file: {:?}", path.as_ref());
+
+    let fpath = path.as_ref().to_str()?;
+
+    let df = LazyFrame::scan_parquet(PlPath::new(fpath), Default::default())
+        .ok()?
+        // .select([
+        //     col("task_index").cast(DataType::UInt64),
+        //     col("__index_level_0__").alias("task"),
+        // ])
+        .collect()
+        .ok()?;
+
+    println!("{:?}", df);
+
+    Some(df)
 }
 
 pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, FileError> {
@@ -192,4 +188,27 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
     let all_episodes = concat(episodes, UnionArgs::default())?.collect()?;
 
     Ok(all_episodes)
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DatasetFeatureStats {
+    min: Vec<Value>,
+    max: Vec<Value>,
+    mean: Vec<Value>,
+    std: Vec<Value>,
+    count: Vec<usize>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct DatasetStats {
+    #[serde(flatten)]
+    pub features: HashMap<String, DatasetFeatureStats>,
+}
+
+pub fn load_stats<P: AsRef<Path>>(path: P) -> Result<DatasetStats, FileError> {
+    println!("Reading from file: {:?}", path.as_ref());
+    let file = File::open(path)?;
+    let reader = io::BufReader::new(file);
+
+    Ok(serde_json::from_reader(reader)?)
 }
