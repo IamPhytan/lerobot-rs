@@ -1,3 +1,4 @@
+use crate::datasets::dataset_reader::DatasetReader;
 use crate::datasets::utils;
 use polars::prelude::{IntoLazy, OptFlags, col, lit};
 use std::{
@@ -5,10 +6,10 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LeRobotDatasetMetadata {
-    repo_id: String,
-    root: PathBuf,
+    pub repo_id: String,
+    pub root: PathBuf,
     revision: String,
     pub info: utils::DatasetInfo,
     pub tasks: polars::frame::DataFrame,
@@ -206,6 +207,10 @@ impl LeRobotDataset {
 
         // Placeholder for loading episodes
         let episodes = Vec::new();
+
+        // Dataset Reader
+        let mut reader = DatasetReader::new(meta.clone());
+        reader.try_load(None);
 
         Self {
             repo_id: repo_id.to_string(),

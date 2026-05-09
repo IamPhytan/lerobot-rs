@@ -7,7 +7,7 @@ use serde_json;
 use serde_json::Value;
 use std::{collections::HashMap, error, fmt, fs::File, io, path::Path, path::PathBuf};
 
-trait PathGlob {
+pub trait PathGlob {
     fn glob(&self, pattern: &str) -> glob::Paths;
 }
 
@@ -105,7 +105,7 @@ pub struct DatasetFeature {
     pub video_info: Option<VideoInfo>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DatasetInfo {
     pub codebase_version: String,
     pub robot_type: String,
@@ -190,7 +190,7 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
     Ok(all_episodes)
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DatasetFeatureStats {
     min: Vec<Value>,
     max: Vec<Value>,
@@ -199,7 +199,7 @@ pub struct DatasetFeatureStats {
     count: Vec<usize>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct DatasetStats {
     #[serde(flatten)]
     pub features: HashMap<String, DatasetFeatureStats>,
