@@ -29,7 +29,7 @@ fn main() {
 
             println!("{task_index:?}");
         }
-        #[cfg(feature = "dataset-viz")]
+        #[cfg(feature = "viz")]
         lerobot_cli::Command::DatasetViz {
             repo,
             episode_index,

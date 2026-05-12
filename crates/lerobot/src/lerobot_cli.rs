@@ -7,7 +7,7 @@ pub struct RepoArgs {
     pub repo_id: String,
 }
 
-#[cfg(feature = "dataset-viz")]
+#[cfg(feature = "viz")]
 #[derive(Copy, Clone, Debug, ValueEnum)]
 pub enum DatasetVizMode {
     Local,
@@ -23,7 +23,7 @@ pub enum Command {
     },
 
     /// Visualize a dataset
-    #[cfg(feature = "dataset-viz")]
+    #[cfg(feature = "viz")]
     DatasetViz {
         #[command(flatten)]
         repo: RepoArgs,
