@@ -212,6 +212,8 @@ impl LeRobotDataset {
         let mut reader = DatasetReader::new(meta.clone());
         reader.try_load(None);
 
+        println!("{:?}", reader.hf_dataset);
+
         Self {
             repo_id: repo_id.to_string(),
             meta,

@@ -1,7 +1,7 @@
 use glob;
+use polars as pl;
 use polars::lazy::prelude::LazyFrame;
 use polars::prelude::{DataType, PlPath, UnionArgs, col, concat};
-use polars::{self as pl, io::SerReader};
 use serde::Deserialize;
 use serde_json;
 use serde_json::Value;
@@ -84,7 +84,7 @@ pub enum DatasetFeatureNames {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-struct VideoInfo {
+pub struct VideoInfo {
     #[serde(rename = "video.fps")]
     video_fps: f32,
     #[serde(rename = "video.codec")]
