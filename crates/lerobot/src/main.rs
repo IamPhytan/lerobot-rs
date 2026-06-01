@@ -39,7 +39,16 @@ fn main() {
         } => {
             let dataset =
                 lerobot::LeRobotDataset::new(repo.repo_id.as_str(), None, None, None, None, None);
-            println!("{:?}", dataset);
+
+            // println!("{:?}", dataset);
+
+            let data_file_path = dataset.meta.get_data_file_path(episode_index as usize);
+            let video_file_path = dataset
+                .meta
+                .get_video_file_path(episode_index as usize, "observation.images.image");
+
+            println!("DATA PATH {:?}", data_file_path,);
+            println!("VIDEO PATH {:?}", video_file_path,);
         }
     }
 }

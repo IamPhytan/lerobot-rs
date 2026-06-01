@@ -182,6 +182,11 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
             )
             .map_err(FileError::from)
             .expect(format!("Error while scanning parquet file {:?}", fpath).as_str())
+            .with_columns([
+                col("episode_index").cast(DataType::UInt32),
+                col("data/chunk_index").cast(DataType::UInt32),
+                col("data/file_index").cast(DataType::UInt32),
+            ])
         })
         .collect::<Vec<LazyFrame>>();
 

@@ -1,5 +1,6 @@
-use crate::datasets::dataset_reader::DatasetReader;
 use crate::datasets::utils;
+use crate::datasets::{dataset_reader::DatasetReader, utils::FileError};
+use polars::lazy::prelude::LazyFrame;
 use polars::prelude::{IntoLazy, OptFlags, col, lit};
 use std::{
     collections::HashMap,
@@ -62,7 +63,80 @@ impl LeRobotDatasetMetadata {
         &self.info.codebase_version
     }
 
-    fn data_path(&self) -> &str {
+    fn get_episode(&self, ep_index: usize) -> Option<LazyFrame> {
+        if ep_index >= self.episodes.height() {
+            // TODO: add an error
+            return None;
+        }
+        let ep: LazyFrame = self
+            .episodes
+            .clone()
+            .lazy()
+            .filter(col("episode_index").eq(ep_index as u32));
+
+        Some(ep)
+    }
+
+    fn get_chunk_index(&self, ep: LazyFrame) -> Option<u32> {
+        let chunk_index: u32 = ep
+            .clone()
+            .select([col("data/chunk_index")])
+            .collect()
+            .ok()?
+            .column("data/chunk_index")
+            .map_err(FileError::from)
+            .ok()?
+            .u32()
+            .ok()?
+            .get(0)?;
+
+        Some(chunk_index)
+    }
+
+    fn get_file_index(&self, ep: LazyFrame) -> Option<u32> {
+        let file_index = ep
+            .clone()
+            .select([col("data/file_index")])
+            .collect()
+            .ok()?
+            .column("data/file_index")
+            .map_err(FileError::from)
+            .ok()?
+            .u32()
+            .ok()?
+            .get(0)?;
+
+        Some(file_index)
+    }
+
+    pub fn get_data_file_path(&self, ep_index: usize) -> Option<PathBuf> {
+        let ep = self.get_episode(ep_index)?;
+        let chunk_index = self.get_chunk_index(ep.clone())?;
+        let file_index = self.get_file_index(ep.clone())?;
+
+        let formatted_data_path = self
+            .data_path()
+            .replace("{chunk_index:03d}", format!("{chunk_index:03}").as_str())
+            .replace("{file_index:03d}", format!("{file_index:03}").as_str());
+
+        Some(formatted_data_path.into())
+    }
+
+    pub fn get_video_file_path(&self, ep_index: usize, vid_key: &str) -> Option<PathBuf> {
+        let ep = self.get_episode(ep_index)?;
+        let chunk_index = self.get_chunk_index(ep.clone())?;
+        let file_index = self.get_file_index(ep.clone())?;
+
+        let formatted_video_path = self
+            .video_path()?
+            .replace("{chunk_index:03d}", format!("{chunk_index:03}").as_str())
+            .replace("{file_index:03d}", format!("{file_index:03}").as_str())
+            .replace("{video_key}", vid_key);
+
+        Some(formatted_video_path.into())
+    }
+
+    pub fn data_path(&self) -> &str {
         &self.info.data_path
     }
 
@@ -211,8 +285,6 @@ impl LeRobotDataset {
         // Dataset Reader
         let mut reader = DatasetReader::new(meta.clone());
         reader.try_load(None);
-
-        println!("{:?}", reader.hf_dataset);
 
         Self {
             repo_id: repo_id.to_string(),
