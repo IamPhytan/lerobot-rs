@@ -174,7 +174,7 @@ impl LeRobotDatasetMetadata {
         self.get_keys_by_filter(vec!["image"])
     }
 
-    fn video_keys(&self) -> Vec<String> {
+    pub fn video_keys(&self) -> Vec<String> {
         self.get_keys_by_filter(vec!["video"])
     }
 
@@ -257,13 +257,11 @@ impl LeRobotDatasetMetadata {
 }
 
 #[derive(Debug)]
-struct Episode {}
-
-#[derive(Debug)]
 pub struct LeRobotDataset {
     pub repo_id: String,
     pub meta: LeRobotDatasetMetadata,
-    episodes: Vec<Episode>,
+    pub reader: DatasetReader,
+    episodes: Option<Vec<usize>>,
 }
 
 impl LeRobotDataset {
@@ -279,16 +277,14 @@ impl LeRobotDataset {
 
         let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, "main");
 
-        // Placeholder for loading episodes
-        let episodes = Vec::new();
-
         // Dataset Reader
-        let mut reader = DatasetReader::new(meta.clone());
-        reader.try_load(None);
+        let mut reader = DatasetReader::new(meta.clone(), episodes.clone());
+        reader.try_load();
 
         Self {
             repo_id: repo_id.to_string(),
             meta,
+            reader,
             episodes,
         }
     }
@@ -297,7 +293,11 @@ impl LeRobotDataset {
         &self.meta.root.as_path()
     }
 
+    fn num_frames(&self) -> usize {
+        self.meta.info.total_frames
+    }
+
     pub fn len(&self) -> usize {
-        self.episodes.len()
+        self.num_frames()
     }
 }
