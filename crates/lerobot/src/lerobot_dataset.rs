@@ -227,15 +227,15 @@ impl LeRobotDatasetMetadata {
             .tasks
             .clone()
             .lazy()
-            .map(
-                |f| {
-                    let _ = f.column("task").iter().map(|&val| println!("{val:?}"));
-                    Ok(f)
-                },
-                OptFlags::all(),
-                None,
-                None,
-            )
+            // .map(
+            //     |f| {
+            //         let _ = f.column("task").iter().map(|&val| println!("{val:?}"));
+            //         Ok(f)
+            //     },
+            //     OptFlags::all(),
+            //     None,
+            //     None,
+            // )
             .filter(col("task").eq(lit(task)))
             .select([col("task_index")])
             .limit(1)

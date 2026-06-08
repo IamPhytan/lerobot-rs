@@ -47,9 +47,6 @@ fn main() {
             );
 
             println!("{:?}", dataset);
-
-            println!("DATA PATH {:?}", data_file_path,);
-            println!("VIDEO PATH {:?}", video_file_path,);
         }
     }
 }
