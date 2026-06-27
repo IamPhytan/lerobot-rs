@@ -9,8 +9,14 @@ fn main() {
 
     match cli.command {
         lerobot_cli::Command::Open { repo } => {
-            let dataset =
-                lerobot::LeRobotDataset::new(repo.repo_id.as_str(), None, None, None, None, None);
+            let dataset = lerobot::LeRobotDataset::new(
+                repo.repo_id.as_str(),
+                repo.root,
+                None,
+                None,
+                None,
+                None,
+            );
 
             println!(
                 "Loaded dataset of size {} with repo ID: {} and root {}",
@@ -39,7 +45,7 @@ fn main() {
         } => {
             let dataset = lerobot::LeRobotDataset::new(
                 repo.repo_id.as_str(),
-                None,
+                repo.root,
                 Some(vec![episode_index as usize]),
                 None,
                 None,

@@ -1,10 +1,14 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 pub struct RepoArgs {
     /// Dataset Repository identifier
     #[arg(long)]
     pub repo_id: String,
+    /// Dataset Root Path
+    #[arg(long)]
+    pub root: Option<PathBuf>,
 }
 
 #[cfg(feature = "viz")]
