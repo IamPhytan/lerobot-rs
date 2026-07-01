@@ -159,8 +159,6 @@ pub fn load_subtasks<P: AsRef<Path>>(path: P) -> Option<pl::frame::DataFrame> {
         .collect()
         .ok()?;
 
-    println!("{:?}", df);
-
     Some(df)
 }
 
@@ -186,6 +184,8 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
                 col("episode_index").cast(DataType::UInt32),
                 col("data/chunk_index").cast(DataType::UInt32),
                 col("data/file_index").cast(DataType::UInt32),
+                col("dataset_from_index").cast(DataType::UInt32),
+                col("dataset_to_index").cast(DataType::UInt32),
             ])
         })
         .collect::<Vec<LazyFrame>>();

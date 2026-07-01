@@ -34,6 +34,8 @@ fn main() {
             let task_index = dataset.meta.get_task_index("put the white mug on the left plate and put the yellow and white mug on the right plate");
 
             println!("{task_index:?}");
+
+            println!("{:?}", dataset);
         }
         #[cfg(feature = "viz")]
         lerobot_cli::Command::DatasetViz {
@@ -52,7 +54,10 @@ fn main() {
                 None,
             );
 
-            println!("{:?}", dataset);
+            for idx in 0..dataset.len() {
+                println!("{:?}", dataset.get_item(idx).unwrap().expect("Coucou"));
+                println!("====");
+            }
         }
     }
 }

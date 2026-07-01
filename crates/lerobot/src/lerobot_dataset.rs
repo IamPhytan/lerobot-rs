@@ -1,7 +1,11 @@
 use crate::datasets::utils;
-use crate::datasets::{dataset_reader::DatasetReader, utils::FileError};
+use crate::datasets::{
+    dataset_reader::DatasetItemValue, dataset_reader::DatasetReader, utils::FileError,
+};
+use polars as pl;
+use polars::error::PolarsResult;
 use polars::lazy::prelude::LazyFrame;
-use polars::prelude::{IntoLazy, OptFlags, col, lit};
+use polars::prelude::{AnyValue, IntoLazy, OptFlags, col, lit};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -275,10 +279,10 @@ impl LeRobotDataset {
     ) -> Self {
         let dataset_root = root.unwrap_or_else(|| crate::lerobot_home().join(repo_id));
 
-        let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, "main");
+        let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, revision.unwrap_or("main"));
 
         // Dataset Reader
-        let mut reader = DatasetReader::new(meta.clone(), episodes.clone());
+        let mut reader = DatasetReader::new(meta.clone(), episodes.clone(), None);
         reader.try_load();
 
         Self {
@@ -293,11 +297,37 @@ impl LeRobotDataset {
         &self.meta.root.as_path()
     }
 
+    /// Number of frames in selected episodes
+    fn fps(&self) -> f32 {
+        self.meta.info.fps
+    }
+
     fn num_frames(&self) -> usize {
-        self.meta.info.total_frames
+        self.meta.total_frames()
+    }
+
+    fn num_episodes(&self) -> usize {
+        self.meta.total_episodes()
+    }
+
+    fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
+        self.meta.features()
+    }
+
+    fn hf_dataset(&mut self) -> &pl::frame::DataFrame {
+        if self.reader.hf_dataset == None {
+            self.reader.try_load();
+        }
+        self.reader
+            .hf_dataset
+            .as_ref()
+            .expect("hf_dataset not loaded")
     }
 
     pub fn len(&self) -> usize {
         self.num_frames()
+    }
+    pub fn get_item(&self, idx: usize) -> PolarsResult<Option<HashMap<String, DatasetItemValue>>> {
+        self.reader.get_item(idx)
     }
 }
