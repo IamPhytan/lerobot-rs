@@ -55,8 +55,7 @@ fn main() {
             );
 
             for idx in 0..dataset.len() {
-                println!("{:?}", dataset.get_item(idx).unwrap().expect("Coucou"));
-                println!("====");
+                dataset.get_item(idx).unwrap().expect("Coucou");
             }
         }
     }

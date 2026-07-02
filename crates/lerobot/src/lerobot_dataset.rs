@@ -289,6 +289,7 @@ impl LeRobotDataset {
             meta.clone(),
             episodes.clone(),
             tolerance_s,
+            None,
             delta_timestamps,
         );
         reader.try_load();

@@ -5,6 +5,8 @@ use std::path::PathBuf;
 use crate::datasets::feature_utils::{check_delta_timestamps, get_delta_indices};
 use crate::datasets::utils::FileError;
 use crate::datasets::utils::PathGlob;
+use crate::datasets::video_utils::VideoBackend;
+use crate::datasets::video_utils::{VideoFrames, decode_video_frames};
 use crate::lerobot_dataset::LeRobotDatasetMetadata;
 use crate::types::{DeltaIndices, DeltaTimestamps, PaddingMask, QueryIndices};
 use polars as pl;
@@ -18,7 +20,7 @@ pub enum DatasetItemValue {
     DataFrame(pl::frame::DataFrame),
     BoolVec(Vec<bool>),
     String(String),
-    // VideoFrames(VideoFrames),
+    VideoFrames(VideoFrames),
 }
 
 #[derive(Debug)]
@@ -26,10 +28,10 @@ pub struct DatasetReader {
     meta: LeRobotDatasetMetadata,
     pub hf_dataset: Option<pl::frame::DataFrame>,
     episodes: Option<Vec<usize>>,
-
+    tolerance_s: f64,
+    video_backend: Option<VideoBackend>,
     pub delta_indices: Option<DeltaIndices>,
     absolute_to_relative_idx: Option<HashMap<usize, usize>>,
-    tolerance_s: f64,
 }
 
 impl DatasetReader {
@@ -37,6 +39,7 @@ impl DatasetReader {
         meta: LeRobotDatasetMetadata,
         episodes: Option<Vec<usize>>,
         tolerance_s: f64,
+        video_backend: Option<&str>,
         delta_timestamps: Option<DeltaTimestamps>,
     ) -> Self {
         let delta_indices: Option<DeltaIndices> = match delta_timestamps {
@@ -49,13 +52,26 @@ impl DatasetReader {
             None => None,
         };
 
+        // TODO: Determine whether we want to propagate this parsing error further
+        let video_backend = match video_backend {
+            Some(name) => match VideoBackend::try_from(name) {
+                Ok(backend) => Some(backend),
+                Err(err) => {
+                    eprintln!("Warning: {err}. Falling back to ffmpeg.");
+                    Some(VideoBackend::Ffmpeg)
+                }
+            },
+            None => None,
+        };
+
         Self {
             meta,
             hf_dataset: None,
             episodes,
+            tolerance_s,
+            video_backend,
             delta_indices,
             absolute_to_relative_idx: None,
-            tolerance_s,
         }
     }
 
@@ -310,44 +326,56 @@ impl DatasetReader {
         Ok(result)
     }
 
-    // fn query_videos(
-    //     &self,
-    //     query_timestamps: &HashMap<String, Vec<f64>>,
-    //     ep_idx: usize,
-    // ) -> PolarsResult<HashMap<String, VideoFrames>> {
-    //     let mut item: HashMap<String, VideoFrames> = HashMap::new();
+    fn query_videos(
+        &self,
+        query_timestamps: &HashMap<String, Vec<f64>>,
+        ep_idx: usize,
+    ) -> PolarsResult<HashMap<String, VideoFrames>> {
+        let mut video_frames: HashMap<String, VideoFrames> = HashMap::new();
 
-    //     for (vid_key, query_ts) in query_timestamps {
-    //         let from_ts_col = format!("videos/{vid_key}/from_timestamp");
+        for (vid_key, query_ts) in query_timestamps {
+            let from_ts_col = format!("videos/{vid_key}/from_timestamp");
 
-    //         let from_timestamp = self
-    //             .meta
-    //             .episodes
-    //             .column(&from_ts_col)?
-    //             .get(ep_idx)?
-    //             .try_extract::<f64>()?;
+            let from_timestamp = self
+                .meta
+                .episodes
+                .column(&from_ts_col)?
+                .get(ep_idx)?
+                .try_extract::<f64>()?;
 
-    //         let shifted_query_ts: Vec<f64> =
-    //             query_ts.iter().map(|ts| from_timestamp + ts).collect();
+            let shifted_query_ts: Vec<f64> =
+                query_ts.iter().map(|ts| from_timestamp + ts).collect();
 
-    //         // Get video file path for ep_idx and vid_key
-    //         let video_rel_path = self.meta.get_video_file_path(ep_idx, vid_key).expect(
-    //             format!(
-    //                 "Could not get video file path for episode {} and video key {}",
-    //                 ep_idx, vid_key
-    //             )
-    //             .as_str(),
-    //         );
-    //         let video_path = self.meta.root.join(video_rel_path);
+            // Get video file path for ep_idx and vid_key
+            let video_rel_path = self.meta.get_video_file_path(ep_idx, vid_key).expect(
+                format!(
+                    "Could not get video file path for episode {} and video key {}",
+                    ep_idx, vid_key
+                )
+                .as_str(),
+            );
+            let video_path = self.meta.root.join(video_rel_path);
 
-    //         // TODO: decode_video_frames
-    //         todo!("decode_video_frames");
-    //         let frames = decode_video_frames(&video_path, &shifted_query_ts, self.tolerance_s);
-    //         item.insert(vid_key.clone(), frames);
-    //     }
+            // TODO: decode_video_frames
+            let frames = decode_video_frames(
+                &video_path,
+                &shifted_query_ts,
+                self.tolerance_s,
+                self.video_backend,
+            ).map_err(|err| {
+                PolarsError::ComputeError(
+                    format!(
+                        "Could not decode video frames for episode {ep_idx}, key {vid_key}, path {}: {err}",
+                        video_path.display()
+                    )
+                    .into(),
+                )
+            })?;
+            video_frames.insert(vid_key.clone(), frames);
+        }
 
-    //     Ok(item)
-    // }
+        Ok(video_frames)
+    }
 
     pub fn get_item(&self, idx: usize) -> PolarsResult<Option<HashMap<String, DatasetItemValue>>> {
         let Some(dataset) = self.hf_dataset.as_ref() else {
@@ -406,10 +434,10 @@ impl DatasetReader {
 
             let query_timestamps = self.get_query_timestamps(current_ts, query_indices.as_ref())?;
 
-            // let video_frames = self.query_videos(&query_timestamps, ep_idx)?;
-            // for (key, frames) in video_frames {
-            //     item.insert(key, DatasetItemValue::VideoFrames(frames));
-            // }
+            let video_frames = self.query_videos(&query_timestamps, ep_idx)?;
+            for (key, frames) in video_frames {
+                item.insert(key, DatasetItemValue::VideoFrames(frames));
+            }
         }
 
         // Extract task
