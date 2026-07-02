@@ -2,6 +2,7 @@ use crate::datasets::utils;
 use crate::datasets::{
     dataset_reader::DatasetItemValue, dataset_reader::DatasetReader, utils::FileError,
 };
+use crate::types::DeltaTimestamps;
 use polars as pl;
 use polars::error::PolarsResult;
 use polars::lazy::prelude::LazyFrame;
@@ -152,8 +153,8 @@ impl LeRobotDatasetMetadata {
         Some(&self.info.robot_type.as_str())
     }
 
-    fn fps(&self) -> Option<f32> {
-        Some(self.info.fps)
+    pub fn fps(&self) -> f32 {
+        self.info.fps
     }
 
     fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
@@ -273,16 +274,23 @@ impl LeRobotDataset {
         repo_id: &str,
         root: Option<PathBuf>,
         episodes: Option<Vec<usize>>,
-        delta_timestamps: Option<HashMap<&str, Vec<f64>>>,
+        delta_timestamps: Option<DeltaTimestamps>,
         tolerance_s: Option<f64>,
         revision: Option<&str>,
     ) -> Self {
         let dataset_root = root.unwrap_or_else(|| crate::lerobot_home().join(repo_id));
+        let revision = revision.unwrap_or("main");
+        let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, revision);
 
-        let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, revision.unwrap_or("main"));
+        let tolerance_s = tolerance_s.unwrap_or(1e-4);
 
         // Dataset Reader
-        let mut reader = DatasetReader::new(meta.clone(), episodes.clone(), None);
+        let mut reader = DatasetReader::new(
+            meta.clone(),
+            episodes.clone(),
+            tolerance_s,
+            delta_timestamps,
+        );
         reader.try_load();
 
         Self {

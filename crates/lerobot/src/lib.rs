@@ -2,6 +2,7 @@ mod datasets;
 pub mod lerobot_dataset;
 use std::env;
 use std::path::PathBuf;
+mod types;
 
 pub use lerobot_dataset::LeRobotDataset;
 

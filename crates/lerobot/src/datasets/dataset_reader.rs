@@ -2,9 +2,11 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use crate::datasets::feature_utils::{check_delta_timestamps, get_delta_indices};
 use crate::datasets::utils::FileError;
 use crate::datasets::utils::PathGlob;
 use crate::lerobot_dataset::LeRobotDatasetMetadata;
+use crate::types::{DeltaIndices, DeltaTimestamps, PaddingMask, QueryIndices};
 use polars as pl;
 use polars::error::{PolarsError, PolarsResult};
 use polars::lazy::prelude::LazyFrame;
@@ -25,27 +27,35 @@ pub struct DatasetReader {
     pub hf_dataset: Option<pl::frame::DataFrame>,
     episodes: Option<Vec<usize>>,
 
-    pub delta_indices: Option<HashMap<String, Vec<isize>>>,
+    pub delta_indices: Option<DeltaIndices>,
     absolute_to_relative_idx: Option<HashMap<usize, usize>>,
     tolerance_s: f64,
 }
-
-type QueryIndices = HashMap<String, Vec<usize>>;
-type PaddingMask = HashMap<String, Vec<bool>>;
 
 impl DatasetReader {
     pub fn new(
         meta: LeRobotDatasetMetadata,
         episodes: Option<Vec<usize>>,
-        tolerance_s: Option<f64>,
+        tolerance_s: f64,
+        delta_timestamps: Option<DeltaTimestamps>,
     ) -> Self {
+        let delta_indices: Option<DeltaIndices> = match delta_timestamps {
+            Some(delta_timestamps) => {
+                check_delta_timestamps(&delta_timestamps, meta.fps(), tolerance_s)
+                    .expect("Invalid delta_timestamps");
+
+                Some(get_delta_indices(&delta_timestamps, meta.fps()))
+            }
+            None => None,
+        };
+
         Self {
             meta,
             hf_dataset: None,
             episodes,
-            delta_indices: None,
+            delta_indices,
             absolute_to_relative_idx: None,
-            tolerance_s: tolerance_s.unwrap_or(1e-4),
+            tolerance_s,
         }
     }
 
