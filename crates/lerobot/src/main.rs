@@ -1,6 +1,7 @@
 use lerobot;
 
 mod lerobot_cli;
+mod lerobot_dataset_viz;
 use clap::Parser;
 use lerobot_cli::LeRobotCli;
 
@@ -44,19 +45,18 @@ fn main() {
             batch_size,
             num_workers,
             mode,
+            tolerance_s,
         } => {
             let dataset = lerobot::LeRobotDataset::new(
                 repo.repo_id.as_str(),
                 repo.root,
                 Some(vec![episode_index as usize]),
                 None,
-                None,
+                Some(tolerance_s),
                 None,
             );
 
-            for idx in 0..dataset.len() {
-                dataset.get_item(idx).unwrap().expect("Coucou");
-            }
+            lerobot_dataset_viz::visualize_dataset(&dataset);
         }
     }
 }

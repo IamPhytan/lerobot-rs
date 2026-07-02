@@ -50,6 +50,11 @@ pub enum Command {
         /// Visualize the data by connecting to the server with `rerun ws://localhost:PORT` on the local machine.
         #[arg(long, default_value = "local")]
         mode: DatasetVizMode,
+
+        /// Tolerance in seconds used to ensure data timestamps respect the dataset fps value
+        /// This is argument passed to the constructor of LeRobotDataset and maps to its tolerance_s constructor argument
+        #[arg(long, default_value_t = 1e-4)]
+        tolerance_s: f64,
     },
 }
 

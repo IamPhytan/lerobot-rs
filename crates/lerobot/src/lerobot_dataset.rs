@@ -2,7 +2,7 @@ use crate::datasets::utils;
 use crate::datasets::{
     dataset_reader::DatasetItemValue, dataset_reader::DatasetReader, utils::FileError,
 };
-use crate::types::DeltaTimestamps;
+use crate::types::{DatasetItem, DeltaTimestamps};
 use polars as pl;
 use polars::error::PolarsResult;
 use polars::lazy::prelude::LazyFrame;
@@ -336,7 +336,54 @@ impl LeRobotDataset {
     pub fn len(&self) -> usize {
         self.num_frames()
     }
-    pub fn get_item(&self, idx: usize) -> PolarsResult<Option<HashMap<String, DatasetItemValue>>> {
+
+    pub fn data_len(&self) -> usize {
+        self.reader.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.reader.is_empty()
+    }
+
+    pub fn get_item(&self, idx: usize) -> DatasetItem {
         self.reader.get_item(idx)
+    }
+
+    pub fn iter(&self) -> LeRobotDatasetIter<'_> {
+        LeRobotDatasetIter {
+            dataset: self,
+            idx: 0,
+            len: self.len(),
+        }
+    }
+}
+
+pub struct LeRobotDatasetIter<'a> {
+    dataset: &'a LeRobotDataset,
+    idx: usize,
+    len: usize,
+}
+
+impl<'a> Iterator for LeRobotDatasetIter<'a> {
+    type Item = DatasetItem;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.len {
+            return None;
+        }
+
+        let idx = self.idx;
+        self.idx += 1;
+
+        Some(self.dataset.get_item(idx))
+    }
+}
+
+impl<'a> IntoIterator for &'a LeRobotDataset {
+    type Item = DatasetItem;
+    type IntoIter = LeRobotDatasetIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }

@@ -8,6 +8,7 @@ use crate::datasets::utils::PathGlob;
 use crate::datasets::video_utils::VideoBackend;
 use crate::datasets::video_utils::{VideoFrames, decode_video_frames};
 use crate::lerobot_dataset::LeRobotDatasetMetadata;
+use crate::types::DatasetItem;
 use crate::types::{DeltaIndices, DeltaTimestamps, PaddingMask, QueryIndices};
 use polars as pl;
 use polars::error::{PolarsError, PolarsResult};
@@ -77,6 +78,10 @@ impl DatasetReader {
 
     pub fn len(&self) -> usize {
         self.hf_dataset.as_ref().map(|df| df.height()).unwrap_or(0)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn try_load(&mut self) -> bool {
@@ -377,10 +382,11 @@ impl DatasetReader {
         Ok(video_frames)
     }
 
-    pub fn get_item(&self, idx: usize) -> PolarsResult<Option<HashMap<String, DatasetItemValue>>> {
-        let Some(dataset) = self.hf_dataset.as_ref() else {
-            return Ok(None);
-        };
+    pub fn get_item(&self, idx: usize) -> DatasetItem {
+        let dataset = self
+            .hf_dataset
+            .as_ref()
+            .ok_or_else(|| PolarsError::ComputeError("hf_dataset is not loaded".into()))?;
 
         if idx >= self.len() {
             return Err(PolarsError::OutOfBounds(
@@ -474,6 +480,6 @@ impl DatasetReader {
             }
         }
 
-        Ok(Some(item))
+        Ok(item)
     }
 }
