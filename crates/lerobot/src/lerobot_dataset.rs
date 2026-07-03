@@ -61,7 +61,7 @@ impl LeRobotDatasetMetadata {
     }
 
     fn url_root(&self) -> String {
-        format!("hf://datasets/{}", &self.repo_id.clone())
+        format!("hf://datasets/{}", &self.repo_id.as_str())
     }
 
     fn _version(&self) -> &str {
