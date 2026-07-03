@@ -114,6 +114,7 @@ pub fn decode_video_frames_ffmpeg(
         });
     }
 
+    ffmpeg::util::log::set_level(ffmpeg::util::log::Level::Error);
     ffmpeg::init().map_err(|err| VideoDecodeError::Ffmpeg(err.to_string()))?;
 
     let mut input = ffmpeg::format::input(&video_path)
