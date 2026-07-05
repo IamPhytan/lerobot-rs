@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::io;
 use std::path::PathBuf;
 
 use crate::datasets::feature_utils::{check_delta_timestamps, get_delta_indices};
@@ -101,6 +102,13 @@ impl DatasetReader {
             .glob("**/*.parquet")
             .map(|p| p.expect("Error reading file {p}"))
             .collect::<Vec<PathBuf>>();
+
+        if files.is_empty() {
+            return Err(FileError::Io(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("No parquet files found in {}", data_dir.display()),
+            )));
+        }
 
         let data = files
             .iter()
@@ -225,17 +233,28 @@ impl DatasetReader {
             return Ok((HashMap::new(), HashMap::new()));
         };
 
-        let ep_start = self
+        let ep = self
             .meta
-            .episodes
+            .get_episode(ep_idx)
+            .ok_or_else(|| {
+                PolarsError::ComputeError(format!("Could not find episode {ep_idx}").into())
+            })?
+            .select([col("dataset_from_index"), col("dataset_to_index")])
+            .collect()?;
+
+        if ep.height() == 0 {
+            return Err(PolarsError::ComputeError(
+                format!("Could not find episode metadata for episode_index {ep_idx}").into(),
+            ));
+        }
+
+        let ep_start = ep
             .column("dataset_from_index")?
-            .get(ep_idx)?
+            .get(0)?
             .try_extract::<u32>()? as usize;
-        let ep_end = self
-            .meta
-            .episodes
+        let ep_end = ep
             .column("dataset_to_index")?
-            .get(ep_idx)?
+            .get(0)?
             .try_extract::<u32>()? as usize;
 
         let mut query_indices: QueryIndices = HashMap::new();
@@ -341,12 +360,22 @@ impl DatasetReader {
         for (vid_key, query_ts) in query_timestamps {
             let from_ts_col = format!("videos/{vid_key}/from_timestamp");
 
-            let from_timestamp = self
+            let ep = self
                 .meta
-                .episodes
-                .column(&from_ts_col)?
-                .get(ep_idx)?
-                .try_extract::<f64>()?;
+                .get_episode(ep_idx)
+                .ok_or_else(|| {
+                    PolarsError::ComputeError(format!("Could not find episode {ep_idx}").into())
+                })?
+                .select([col(&from_ts_col)])
+                .collect()?;
+
+            if ep.height() == 0 {
+                return Err(PolarsError::ComputeError(
+                    format!("Could not find episode metadata for episode_index {ep_idx}").into(),
+                ));
+            }
+
+            let from_timestamp = ep.column(&from_ts_col)?.get(0)?.try_extract::<f64>()?;
 
             let shifted_query_ts: Vec<f64> =
                 query_ts.iter().map(|ts| from_timestamp + ts).collect();

@@ -68,7 +68,7 @@ impl LeRobotDatasetMetadata {
         &self.info.codebase_version
     }
 
-    fn get_episode(&self, ep_index: usize) -> Option<LazyFrame> {
+    pub fn get_episode(&self, ep_index: usize) -> Option<LazyFrame> {
         if ep_index >= self.episodes.height() {
             // TODO: add an error
             return None;
@@ -146,7 +146,11 @@ impl LeRobotDatasetMetadata {
     }
 
     fn video_path(&self) -> Option<&str> {
-        Some(&self.info.video_path.as_str())
+        if self.info.video_path.is_empty() {
+            None
+        } else {
+            Some(self.info.video_path.as_str())
+        }
     }
 
     fn robot_type(&self) -> Option<&str> {

@@ -12,7 +12,7 @@ pub struct RepoArgs {
 }
 
 #[cfg(feature = "viz")]
-#[derive(Copy, Clone, Debug, ValueEnum)]
+#[derive(Copy, Clone, Debug, ValueEnum, PartialEq, Eq)]
 pub enum DatasetVizMode {
     Local,
     Distant,
