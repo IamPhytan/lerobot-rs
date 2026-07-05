@@ -5,7 +5,6 @@ use std::path::PathBuf;
 
 use crate::datasets::feature_utils::{check_delta_timestamps, get_delta_indices};
 use crate::datasets::utils::FileError;
-use crate::datasets::utils::PathGlob;
 use crate::datasets::video_utils::VideoBackend;
 use crate::datasets::video_utils::{VideoFrames, decode_video_frames};
 use crate::lerobot_dataset::LeRobotDatasetMetadata;
@@ -14,7 +13,7 @@ use crate::types::{DeltaIndices, DeltaTimestamps, PaddingMask, QueryIndices};
 use polars as pl;
 use polars::error::{PolarsError, PolarsResult};
 use polars::lazy::prelude::LazyFrame;
-use polars::prelude::{AnyValue, DataType, PlPath, UnionArgs, col, concat};
+use polars::prelude::{AnyValue, DataType, PlPath, UnionArgs, col, concat, lit};
 
 #[derive(Debug)]
 pub enum DatasetItemValue {
@@ -95,18 +94,31 @@ impl DatasetReader {
     }
 
     pub fn load_hf_dataset(&self) -> Result<pl::frame::DataFrame, FileError> {
-        let data_dir = self.meta.root.join("data");
-        println!("Reading data dir: {:?}", data_dir);
+        println!("Reading data in: {:?}", self.meta.root.join("data"));
 
-        let files = data_dir
-            .glob("**/*.parquet")
-            .map(|p| p.expect("Error reading file {p}"))
+        let requested_episodes = pl::series::Series::from_iter(match &self.episodes {
+            Some(episodes) => episodes.iter().map(|&ep| ep as u32).collect::<Vec<u32>>(),
+            None => (0..self.meta.info.total_episodes)
+                .map(|ep| ep as u32)
+                .collect::<Vec<u32>>(),
+        });
+
+        let files = self
+            .get_episodes_file_paths()
+            .into_iter()
+            .filter(|path| {
+                path.extension()
+                    .and_then(|ext| ext.to_str())
+                    .map(|ext| ext == "parquet")
+                    .unwrap_or(false)
+            })
+            .map(|path| self.meta.root.join(path))
             .collect::<Vec<PathBuf>>();
 
         if files.is_empty() {
             return Err(FileError::Io(io::Error::new(
                 io::ErrorKind::NotFound,
-                format!("No parquet files found in {}", data_dir.display()),
+                "No parquet files found for requested_episodes",
             )));
         }
 
@@ -124,7 +136,9 @@ impl DatasetReader {
             })
             .collect::<Vec<LazyFrame>>();
 
-        let all_data = concat(data, UnionArgs::default())?.collect()?;
+        let all_data = concat(data, UnionArgs::default())?
+            .filter(col("episode_index").is_in(lit(requested_episodes), false))
+            .collect()?;
 
         Ok(all_data)
     }
@@ -197,11 +211,12 @@ impl DatasetReader {
     }
 
     pub fn get_episodes_file_paths(&self) -> Vec<PathBuf> {
-        let episodes = self
-            .episodes
-            .clone()
-            .unwrap_or((0..self.meta.info.total_episodes).collect::<Vec<usize>>());
-        let mut fpaths = episodes
+        let requested_episodes: HashSet<usize> = match &self.episodes {
+            Some(episodes) => HashSet::from_iter(episodes.clone()),
+            None => HashSet::from_iter((0..self.meta.info.total_episodes).into_iter()),
+        };
+
+        let mut fpaths = requested_episodes
             .iter()
             .filter_map(|&ep_idx| self.meta.get_data_file_path(ep_idx))
             .collect::<Vec<PathBuf>>();
@@ -211,7 +226,7 @@ impl DatasetReader {
             .video_keys()
             .iter()
             .map(|vid_key| {
-                episodes
+                requested_episodes
                     .iter()
                     .filter_map(|&ep_idx| self.meta.get_video_file_path(ep_idx, vid_key))
                     .collect::<Vec<PathBuf>>()

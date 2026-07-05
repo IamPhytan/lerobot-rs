@@ -16,6 +16,7 @@ polars = { version = "0.52.0", features = [
     "lazy",
     "timezones",
     "dtype-array",
+    "is_in",
 ] }
 rerun = { version = "0.29.0", features = ["web_viewer"], optional = true }
 serde = { version = "1.0.228", features = ["derive"] }

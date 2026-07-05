@@ -338,10 +338,6 @@ impl LeRobotDataset {
     }
 
     pub fn len(&self) -> usize {
-        self.num_frames()
-    }
-
-    pub fn data_len(&self) -> usize {
         self.reader.len()
     }
 
