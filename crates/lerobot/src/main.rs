@@ -37,6 +37,9 @@ fn main() {
             println!("{task_index:?}");
 
             println!("{:?}", dataset);
+
+            println!("=========================");
+            println!("{:?}", dataset.meta.episodes);
         }
         #[cfg(feature = "viz")]
         lerobot_cli::Command::DatasetViz {
@@ -56,7 +59,7 @@ fn main() {
                 None,
             );
 
-            lerobot_dataset_viz::visualize_dataset(&dataset);
+            lerobot_dataset_viz::visualize_dataset(&dataset, episode_index as usize, mode);
         }
     }
 }

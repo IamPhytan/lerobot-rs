@@ -426,7 +426,7 @@ impl DatasetReader {
         Ok(video_frames)
     }
 
-    pub fn get_item(&self, idx: usize) -> DatasetItem {
+    pub fn get_item(&self, idx: usize) -> PolarsResult<DatasetItem> {
         let dataset = self
             .hf_dataset
             .as_ref()

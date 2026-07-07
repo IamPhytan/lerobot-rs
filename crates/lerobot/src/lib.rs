@@ -3,6 +3,9 @@ pub mod lerobot_dataset;
 use std::env;
 use std::path::PathBuf;
 mod types;
+pub use datasets::dataset_reader::DatasetItemValue;
+pub use datasets::video_utils::VideoFrames;
+pub use types::DatasetItem;
 
 pub use lerobot_dataset::LeRobotDataset;
 

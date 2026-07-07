@@ -1,12 +1,10 @@
 use crate::datasets::utils;
-use crate::datasets::{
-    dataset_reader::DatasetItemValue, dataset_reader::DatasetReader, utils::FileError,
-};
+use crate::datasets::{dataset_reader::DatasetReader, utils::FileError};
 use crate::types::{DatasetItem, DeltaTimestamps};
 use polars as pl;
 use polars::error::PolarsResult;
 use polars::lazy::prelude::LazyFrame;
-use polars::prelude::{AnyValue, IntoLazy, OptFlags, col, lit};
+use polars::prelude::{IntoLazy, col, lit};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -187,7 +185,7 @@ impl LeRobotDatasetMetadata {
         self.get_keys_by_filter(vec!["video"])
     }
 
-    fn camera_keys(&self) -> Vec<String> {
+    pub fn camera_keys(&self) -> Vec<String> {
         self.get_keys_by_filter(vec!["video", "image"])
     }
 
@@ -345,7 +343,7 @@ impl LeRobotDataset {
         self.reader.is_empty()
     }
 
-    pub fn get_item(&self, idx: usize) -> DatasetItem {
+    pub fn get_item(&self, idx: usize) -> PolarsResult<DatasetItem> {
         self.reader.get_item(idx)
     }
 
@@ -365,7 +363,7 @@ pub struct LeRobotDatasetIter<'a> {
 }
 
 impl<'a> Iterator for LeRobotDatasetIter<'a> {
-    type Item = DatasetItem;
+    type Item = PolarsResult<DatasetItem>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.idx >= self.len {
@@ -380,7 +378,7 @@ impl<'a> Iterator for LeRobotDatasetIter<'a> {
 }
 
 impl<'a> IntoIterator for &'a LeRobotDataset {
-    type Item = DatasetItem;
+    type Item = PolarsResult<DatasetItem>;
     type IntoIter = LeRobotDatasetIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {

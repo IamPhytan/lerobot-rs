@@ -11,4 +11,4 @@ pub type DeltaTimestamps = HashMap<String, Vec<f64>>;
 pub type DeltaIndices = HashMap<String, Vec<isize>>;
 
 // Dataset Item
-pub type DatasetItem = PolarsResult<HashMap<String, DatasetItemValue>>;
+pub type DatasetItem = HashMap<String, DatasetItemValue>;
