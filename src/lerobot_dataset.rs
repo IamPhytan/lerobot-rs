@@ -12,14 +12,14 @@ use std::{
 
 /// Metadata container for a LeRobot dataset.
 ///
-/// Similar to `LeRobotDatasetMetadata`` in [LeRobot](https://github.com/huggingface/lerobot).
+/// Similar to `LeRobotDatasetMetadata` in [LeRobot](https://github.com/huggingface/lerobot).
 ///
 /// Manages the ``info.json``, ``stats.json``, ``tasks.parquet``, and ``episodes/`` parquet files that describe a dataset's structure, content, and statistics.
 #[derive(Debug, Clone)]
 pub struct LeRobotDatasetMetadata {
     /// Repository identifier (e.g. ``'lerobot/aloha_sim'``).
     pub repo_id: String,
-    /// Local directory for the dataset.When omitted, existing local datasets are looked up under ``$HF_LEROBOT_HOME/{repo_id}``.
+    /// Local directory for the dataset. When omitted, existing local datasets are looked up under ``$HF_LEROBOT_HOME/{repo_id}``.
     pub root: PathBuf,
     /// Git revision (branch, tag, or commit hash). Defaults to the current codebase version.
     pub revision: String,
@@ -345,15 +345,43 @@ impl LeRobotDatasetMetadata {
     }
 }
 
+/// Container for a LeRobot dataset.
+///
+/// Similar to `LeRobotDataset` in [LeRobot](https://github.com/huggingface/lerobot).
+///
+/// This type provides access to the dataset metadata and initializes a reader for the selected episodes.
 #[derive(Debug)]
 pub struct LeRobotDataset {
+    /// Repository identifier (e.g. ``'lerobot/aloha_sim'``).
     pub repo_id: String,
+    /// Metadata associated to the dataset.
     pub meta: LeRobotDatasetMetadata,
+    /// Dataset reader used to access the dataset contents.
     pub reader: DatasetReader,
     episodes: Option<Vec<usize>>,
 }
 
 impl LeRobotDataset {
+    /// Creates a new LeRobot dataset.
+    ///
+    /// The dataset metadata is loaded from the local dataset directory and a [`DatasetReader`] is initialized for the requested episodes.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_id` - Repository identifier, e.g. `lerobot/aloha_sim`.
+    /// * `root` - Local dataset directory. If `None`, defaults to
+    ///   `$HF_LEROBOT_HOME/{repo_id}`.
+    /// * `episodes` - If specified, this will only load episodes specified by their episode_index in this list. If `None`, all available
+    ///   episodes are used.
+    /// * `delta_timestamps` - Optional timestamp offsets used when retrieving
+    ///   temporally related data.
+    /// * `tolerance_s` - Timestamp matching tolerance, in seconds, used to ensure data timestamps are actually in sync with the fps value.
+    /// Defaults to `1e-4`.
+    /// * `revision` - Optional Git revision (branch, tag, or commit hash).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the dataset metadata cannot be loaded or parsed.
     pub fn new(
         repo_id: &str,
         root: Option<PathBuf>,
@@ -386,28 +414,33 @@ impl LeRobotDataset {
         }
     }
 
+    /// Local directory for the dataset.
     pub fn root(&self) -> &Path {
         &self.meta.root.as_path()
     }
 
-    /// Number of frames in selected episodes
-    fn fps(&self) -> f32 {
+    /// Frames per second used during data collection.
+    pub fn fps(&self) -> f32 {
         self.meta.info.fps
     }
 
-    fn num_frames(&self) -> usize {
+    /// Number of frames in selected episodes.
+    pub fn num_frames(&self) -> usize {
         self.meta.total_frames()
     }
 
-    fn num_episodes(&self) -> usize {
+    /// Number of episodes selected.
+    pub fn num_episodes(&self) -> usize {
         self.meta.total_episodes()
     }
 
-    fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
+    /// Feature specification dict mapping feature names to their type/shape metadata.
+    pub fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
         self.meta.features()
     }
 
-    fn hf_dataset(&mut self) -> &pl::frame::DataFrame {
+    /// The underlying Hugging Face LeRobot Dataset
+    pub fn hf_dataset(&mut self) -> &pl::frame::DataFrame {
         if self.reader.hf_dataset == None {
             self.reader.try_load();
         }
@@ -417,6 +450,7 @@ impl LeRobotDataset {
             .expect("hf_dataset not loaded")
     }
 
+    /// Return the number of frames in the selected episodes.
     pub fn len(&self) -> usize {
         self.reader.len()
     }
