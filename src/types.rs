@@ -1,5 +1,4 @@
 use crate::datasets::dataset_reader::DatasetItemValue;
-use polars::error::PolarsResult;
 use std::collections::HashMap;
 
 // Query Indices and associated Padding Masks

@@ -130,7 +130,7 @@ impl DatasetReader {
                     Default::default(),
                 )
                 .map_err(FileError::from)
-                .expect(format!("Error while scanning parquet file {:?}", fpath).as_str())
+                .unwrap_or_else(|_| panic!("Error while scanning parquet file {:?}", fpath))
                 .with_column(col("episode_index").cast(DataType::UInt32))
                 .with_column(col("task_index").cast(DataType::UInt32))
             })

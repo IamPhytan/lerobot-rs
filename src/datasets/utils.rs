@@ -179,7 +179,7 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
                 Default::default(),
             )
             .map_err(FileError::from)
-            .expect(format!("Error while scanning parquet file {:?}", fpath).as_str())
+            .unwrap_or_else(|_| panic!("Error while scanning parquet file {:?}", fpath))
             .with_columns([
                 col("episode_index").cast(DataType::UInt32),
                 col("data/chunk_index").cast(DataType::UInt32),

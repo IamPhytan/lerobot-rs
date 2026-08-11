@@ -18,7 +18,7 @@ pub fn visualize_dataset(
     rr::external::re_log::setup_logging();
 
     let repo_id = dataset.repo_id.to_string();
-    let spawn_local_viewer = mode == DatasetVizMode::Local;
+    let _spawn_local_viewer = mode == DatasetVizMode::Local;
 
     let rec_builder = rr::RecordingStreamBuilder::new(format!("{repo_id}/episode_{episode_index}"));
 

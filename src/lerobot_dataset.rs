@@ -10,20 +10,59 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Metadata container for a LeRobot dataset.
+///
+/// Similar to `LeRobotDatasetMetadata`` in [LeRobot](https://github.com/huggingface/lerobot).
+///
+/// Manages the ``info.json``, ``stats.json``, ``tasks.parquet``, and ``episodes/`` parquet files that describe a dataset's structure, content, and statistics.
 #[derive(Debug, Clone)]
 pub struct LeRobotDatasetMetadata {
+    /// Repository identifier (e.g. ``'lerobot/aloha_sim'``).
     pub repo_id: String,
+    /// Local directory for the dataset.When omitted, existing local datasets are looked up under ``$HF_LEROBOT_HOME/{repo_id}``.
     pub root: PathBuf,
-    revision: String,
+    /// Git revision (branch, tag, or commit hash). Defaults to the current codebase version.
+    pub revision: String,
+    /// Dataset information imported from `meta/info.json`.
+    ///
+    /// See [`utils::DatasetInfo`].
     pub info: utils::DatasetInfo,
+    /// Dataset tasks imported from `meta/tasks.parquet`.
     pub tasks: polars::frame::DataFrame,
+    /// Dataset subtasks imported from `meta/subtasks.parquet`, if present.
     pub subtasks: Option<polars::frame::DataFrame>,
+    /// Dataset episode metadata info imported from `meta/episodes/`.
     pub episodes: polars::frame::DataFrame,
+    /// Dataset statistics used for normalization imported from `meta/stats.json`.
+    ///
+    /// See [`utils::DatasetStats`].
     pub stats: utils::DatasetStats,
 }
 
 impl LeRobotDatasetMetadata {
-    pub fn new(repo_id: &str, root: PathBuf, revision: &str) -> Self {
+    /// Load metadata for an existing LeRobot dataset.
+    ///
+    /// Metadata files are loaded from the `meta/` directory under `root`, including dataset information, tasks, subtasks, episodes, and statistics.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_id`: Repository identifier (e.g. ``'lerobot/aloha_sim'``).
+    /// * `root` - Local path to the dataset root directory.
+    /// * `revision` - Git revision associated with the dataset (branch, tag, or commit hash). Optional, defaults to ``'main'``
+    ///
+    /// # Panics
+    ///
+    /// Panics if any required metadata file cannot be read or parsed:
+    ///
+    /// * `meta/info.json`
+    /// * `meta/tasks.parquet`
+    /// * `meta/episodes/`
+    /// * `meta/stats.json`
+    ///
+    /// The `meta/subtasks.parquet` file is optional.
+    pub fn new(repo_id: &str, root: PathBuf, revision: Option<&str>) -> Self {
+        let revision = revision.unwrap_or("main").to_string();
+
         // Load metadata
         let meta_dir = root.join("meta");
 
@@ -49,7 +88,7 @@ impl LeRobotDatasetMetadata {
         Self {
             repo_id: repo_id.to_string(),
             root,
-            revision: revision.to_string(),
+            revision,
             info,
             tasks,
             subtasks,
@@ -58,17 +97,28 @@ impl LeRobotDatasetMetadata {
         }
     }
 
-    fn url_root(&self) -> String {
+    /// Hugging Face Hub URL root for this dataset.
+    pub fn url_root(&self) -> String {
         format!("hf://datasets/{}", &self.repo_id.as_str())
     }
 
+    /// Codebase version used to create this dataset.
     fn _version(&self) -> &str {
         &self.info.codebase_version
     }
 
+    /// Get metadata corresponding to episode `ep_index`
+    ///
+    /// # Arguments
+    ///
+    /// * `ep_index` - Index of the episode to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`LazyFrame`] containing the metadata for the requested episode,
+    /// or `None` if `ep_index` is out of bounds.
     pub fn get_episode(&self, ep_index: usize) -> Option<LazyFrame> {
         if ep_index >= self.episodes.height() {
-            // TODO: add an error
             return None;
         }
         let ep: LazyFrame = self
@@ -81,9 +131,7 @@ impl LeRobotDatasetMetadata {
     }
 
     fn get_chunk_index(&self, ep: LazyFrame) -> Option<u32> {
-        let chunk_index: u32 = ep
-            .clone()
-            .select([col("data/chunk_index")])
+        ep.select([col("data/chunk_index")])
             .collect()
             .ok()?
             .column("data/chunk_index")
@@ -91,15 +139,11 @@ impl LeRobotDatasetMetadata {
             .ok()?
             .u32()
             .ok()?
-            .get(0)?;
-
-        Some(chunk_index)
+            .get(0)
     }
 
     fn get_file_index(&self, ep: LazyFrame) -> Option<u32> {
-        let file_index = ep
-            .clone()
-            .select([col("data/file_index")])
+        ep.select([col("data/file_index")])
             .collect()
             .ok()?
             .column("data/file_index")
@@ -107,11 +151,19 @@ impl LeRobotDatasetMetadata {
             .ok()?
             .u32()
             .ok()?
-            .get(0)?;
-
-        Some(file_index)
+            .get(0)
     }
 
+    /// Return the relative parquet file path for the given episode index `ep_index`.
+    ///
+    /// # Arguments
+    ///
+    /// * `ep_index` - Zero-based episode index of the episode to retrieve.
+    ///
+    /// # Returns
+    ///
+    /// Path to the parquet file containing this episode's data,
+    /// or `None` if the episode, chunk index, or file index cannot be found.
     pub fn get_data_file_path(&self, ep_index: usize) -> Option<PathBuf> {
         let ep = self.get_episode(ep_index)?;
         let chunk_index = self.get_chunk_index(ep.clone())?;
@@ -125,6 +177,17 @@ impl LeRobotDatasetMetadata {
         Some(formatted_data_path.into())
     }
 
+    /// Return the relative video file path for the given episode `ep_index` and video key `vid_key`.
+    ///
+    /// # Arguments
+    ///
+    /// * `ep_index` - Zero-based episode index of the episode to retrieve.
+    /// * `vid_key` - Feature key identifying the video stream (e.g. ``'observation.images.laptop'``).
+    ///
+    /// # Returns
+    ///
+    /// Path to the video file containing this episode's frames,
+    /// or `None` if the episode, chunk index, file index, or video path cannot be found.
     pub fn get_video_file_path(&self, ep_index: usize, vid_key: &str) -> Option<PathBuf> {
         let ep = self.get_episode(ep_index)?;
         let chunk_index = self.get_chunk_index(ep.clone())?;
@@ -139,11 +202,13 @@ impl LeRobotDatasetMetadata {
         Some(formatted_video_path.into())
     }
 
+    /// Formattable string for the parquet files.
     pub fn data_path(&self) -> &str {
         &self.info.data_path
     }
 
-    fn video_path(&self) -> Option<&str> {
+    /// Formattable string for the video files.
+    pub fn video_path(&self) -> Option<&str> {
         if self.info.video_path.is_empty() {
             None
         } else {
@@ -151,15 +216,18 @@ impl LeRobotDatasetMetadata {
         }
     }
 
-    fn robot_type(&self) -> Option<&str> {
+    /// Robot type used in recording this dataset.
+    pub fn robot_type(&self) -> Option<&str> {
         Some(&self.info.robot_type.as_str())
     }
 
+    /// Frames per second used during data collection.
     pub fn fps(&self) -> f32 {
         self.info.fps
     }
 
-    fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
+    /// All features contained in the dataset.
+    pub fn features(&self) -> Option<HashMap<String, utils::DatasetFeature>> {
         Some(self.info.features.clone())
     }
 
@@ -177,19 +245,23 @@ impl LeRobotDatasetMetadata {
             .collect::<Vec<_>>()
     }
 
-    fn image_keys(&self) -> Vec<String> {
+    /// Keys to access visual modalities stored as images.
+    pub fn image_keys(&self) -> Vec<String> {
         self.get_keys_by_filter(vec!["image"])
     }
 
+    /// Keys to access visual modalities stored as videos.
     pub fn video_keys(&self) -> Vec<String> {
         self.get_keys_by_filter(vec!["video"])
     }
 
+    /// Keys to access visual modalities (regardless of their storage method).
     pub fn camera_keys(&self) -> Vec<String> {
         self.get_keys_by_filter(vec!["video", "image"])
     }
 
-    fn names(&self) -> HashMap<String, Option<utils::DatasetFeatureNames>> {
+    /// Names of the various dimensions of vector modalities.
+    pub fn names(&self) -> HashMap<String, Option<utils::DatasetFeatureNames>> {
         self.features()
             .unwrap_or(HashMap::new())
             .iter()
@@ -197,7 +269,8 @@ impl LeRobotDatasetMetadata {
             .collect()
     }
 
-    fn shapes(&self) -> HashMap<String, Vec<usize>> {
+    /// Shapes for the different features.
+    pub fn shapes(&self) -> HashMap<String, Vec<usize>> {
         self.features()
             .unwrap_or(HashMap::new())
             .iter()
@@ -205,49 +278,58 @@ impl LeRobotDatasetMetadata {
             .collect()
     }
 
-    fn total_episodes(&self) -> usize {
+    /// Total number of episodes available.
+    pub fn total_episodes(&self) -> usize {
         self.info.total_episodes
     }
 
-    fn total_frames(&self) -> usize {
+    /// Total number of frames saved in this dataset.
+    pub fn total_frames(&self) -> usize {
         self.info.total_frames
     }
 
-    fn total_tasks(&self) -> usize {
+    /// Total number of different tasks performed in this dataset.
+    pub fn total_tasks(&self) -> usize {
         self.info.total_tasks
     }
 
-    fn chunks_size(&self) -> usize {
+    /// Max number of files per chunk.
+    pub fn chunks_size(&self) -> usize {
         self.info.chunks_size
     }
 
-    fn data_files_size_in_mb(&self) -> u32 {
+    /// Max size of data file in mega bytes.
+    pub fn data_files_size_in_mb(&self) -> u32 {
         self.info.data_files_size_in_mb
     }
 
-    fn video_files_size_in_mb(&self) -> u32 {
+    /// Max size of video file in mega bytes.
+    pub fn video_files_size_in_mb(&self) -> u32 {
         self.info.video_files_size_in_mb
     }
 
+    /// Given a `task` in natural language, returns its task_index if the task already exists in the dataset, otherwise return `None`.
+    ///
+    /// # Arguments
+    ///
+    /// * `task` - Natural-language description of the task.
+    ///
+    /// # Returns
+    ///
+    /// Returns the task index if a matching task exists, or `None` otherwise.
+    /// # Panics
+    ///
+    /// Panics if the task table cannot be queried, if the `task_index` column is missing, or if the column cannot be interpreted as `u64`.
     pub fn get_task_index(&self, task: &str) -> Option<usize> {
         let filtered_tasks = self
             .tasks
             .clone()
             .lazy()
-            // .map(
-            //     |f| {
-            //         let _ = f.column("task").iter().map(|&val| println!("{val:?}"));
-            //         Ok(f)
-            //     },
-            //     OptFlags::all(),
-            //     None,
-            //     None,
-            // )
             .filter(col("task").eq(lit(task)))
             .select([col("task_index")])
             .limit(1)
             .collect()
-            .expect(format!("Problem finding task: {}", task).as_str());
+            .unwrap_or_else(|_| panic!("Problem finding task: {task}"));
 
         if filtered_tasks.height() == 0 {
             return None;
