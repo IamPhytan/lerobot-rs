@@ -357,7 +357,7 @@ pub struct LeRobotDataset {
     /// Metadata associated to the dataset.
     pub meta: LeRobotDatasetMetadata,
     /// Dataset reader used to access the dataset contents.
-    pub reader: DatasetReader,
+    reader: DatasetReader,
     episodes: Option<Vec<usize>>,
 }
 
@@ -375,8 +375,7 @@ impl LeRobotDataset {
     ///   episodes are used.
     /// * `delta_timestamps` - Optional timestamp offsets used when retrieving
     ///   temporally related data.
-    /// * `tolerance_s` - Timestamp matching tolerance, in seconds, used to ensure data timestamps are actually in sync with the fps value.
-    /// Defaults to `1e-4`.
+    /// * `tolerance_s` - Timestamp matching tolerance, in seconds, used to ensure data timestamps are actually in sync with the fps value. Defaults to `1e-4`.
     /// * `revision` - Optional Git revision (branch, tag, or commit hash).
     ///
     /// # Panics
@@ -391,7 +390,6 @@ impl LeRobotDataset {
         revision: Option<&str>,
     ) -> Self {
         let dataset_root = root.unwrap_or_else(|| crate::lerobot_home().join(repo_id));
-        let revision = revision.unwrap_or("main");
         let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, revision);
 
         let tolerance_s = tolerance_s.unwrap_or(1e-4);
@@ -455,14 +453,28 @@ impl LeRobotDataset {
         self.reader.len()
     }
 
+    /// Returns `true` if the dataset contains no items.
     pub fn is_empty(&self) -> bool {
         self.reader.is_empty()
     }
 
+    /// Returns the dataset item at index `idx`.
+    ///
+    /// # Arguments
+    ///
+    /// * `idx` - Zero-based index of the item to retrieve.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the item cannot be read or converted into a [`DatasetItem`].
     pub fn get_item(&self, idx: usize) -> PolarsResult<DatasetItem> {
         self.reader.get_item(idx)
     }
 
+    /// Returns an iterator over the dataset items.
+    ///
+    /// Items are yielded in index order, from `0` to `self.len() - 1`.
+    /// Each iteration returns a [`PolarsResult<DatasetItem>`].
     pub fn iter(&self) -> LeRobotDatasetIter<'_> {
         LeRobotDatasetIter {
             dataset: self,
@@ -472,6 +484,10 @@ impl LeRobotDataset {
     }
 }
 
+/// Iterator over the items of a [`LeRobotDataset`].
+///
+/// Items are yielded in dataset index order. Reading an item may fail,
+/// in which case the iterator yields a [`PolarsResult::Err`].
 pub struct LeRobotDatasetIter<'a> {
     dataset: &'a LeRobotDataset,
     idx: usize,
@@ -499,5 +515,11 @@ impl<'a> IntoIterator for &'a LeRobotDataset {
 
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
+    }
+}
+
+impl ExactSizeIterator for LeRobotDatasetIter<'_> {
+    fn len(&self) -> usize {
+        self.len.saturating_sub(self.idx)
     }
 }

@@ -83,17 +83,29 @@ pub enum DatasetFeatureNames {
     Vec(Vec<String>),
 }
 
+/// Video metadata associated with video dataset features.
+///
+/// The fields are deserialized from the video metadata representation in `meta/info.json`.
 #[derive(Deserialize, Debug, Clone)]
 pub struct VideoInfo {
+    /// Video frame reate, in frames per second.
     #[serde(rename = "video.fps")]
-    video_fps: f32,
+    pub video_fps: f32,
+
+    /// Video codec used for encoding.
     #[serde(rename = "video.codec")]
-    video_codec: String,
+    pub video_codec: String,
+
+    /// Pixel format used by the video.
     #[serde(rename = "video.pix_fmt")]
-    video_pix_fmt: String,
+    pub video_pix_fmt: String,
+
+    /// Whether the video represents a depth map.
     #[serde(rename = "video.is_depth_map")]
-    video_is_depth_map: bool,
-    has_audio: bool,
+    pub video_is_depth_map: bool,
+
+    /// Whether the video contains an audio stream.
+    pub has_audio: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -195,13 +207,52 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
     Ok(all_episodes)
 }
 
+/// Statistics for a LeRobot dataset feature.
+///
+/// Deserialized from the corresponding entry in `meta/stats.json`.
 #[derive(Deserialize, Debug, Clone)]
 pub struct DatasetFeatureStats {
+    /// Minimum values observed for the feature.
     min: Vec<Value>,
+
+    /// Maximum values observed for the feature.
     max: Vec<Value>,
+
+    /// Mean values of the feature.
     mean: Vec<Value>,
+
+    /// Standard deviation values of the feature.
     std: Vec<Value>,
+
+    /// Number of samples used to compute the statistics.
     count: Vec<usize>,
+}
+
+impl DatasetFeatureStats {
+    /// Returns the minimum values observed for the feature.
+    pub fn min(&self) -> &[Value] {
+        &self.min
+    }
+
+    /// Returns the maximum values observed for the feature.
+    pub fn max(&self) -> &[Value] {
+        &self.max
+    }
+
+    /// Returns the mean values of the feature.
+    pub fn mean(&self) -> &[Value] {
+        &self.mean
+    }
+
+    /// Returns the standard deviation values of the feature.
+    pub fn std(&self) -> &[Value] {
+        &self.std
+    }
+
+    /// Returns the number of samples used to compute the statistics.
+    pub fn count(&self) -> &[usize] {
+        &self.count
+    }
 }
 
 #[derive(Deserialize, Debug, Clone)]

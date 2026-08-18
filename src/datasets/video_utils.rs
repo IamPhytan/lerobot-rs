@@ -126,7 +126,7 @@ pub fn decode_video_frames_ffmpeg(
         .ok_or_else(|| {
             VideoDecodeError::Ffmpeg(format!(
                 "could not find video stream in {}",
-                &video_path.display()
+                video_path.display()
             ))
         })?;
 

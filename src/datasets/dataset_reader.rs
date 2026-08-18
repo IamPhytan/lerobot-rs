@@ -15,12 +15,21 @@ use polars::error::{PolarsError, PolarsResult};
 use polars::lazy::prelude::LazyFrame;
 use polars::prelude::{AnyValue, DataType, PlPath, UnionArgs, col, concat, lit};
 
+/// Value stored in a [`DatasetItem`].
+///
+/// A dataset item may contain values represented as Polars scalars,
+/// data frames, boolean vectors, strings, or video frames.
 #[derive(Debug)]
 pub enum DatasetItemValue {
+    /// A scalar value extracted from a Polars column.
     Polars(AnyValue<'static>),
+    /// Tabular value represented as a Polars DataFrame.
     DataFrame(pl::frame::DataFrame),
+    /// A sequence of boolean values.
     BoolVec(Vec<bool>),
+    /// A UTF-8 string value.
     String(String),
+    /// Video frames associated with the dataset item.
     VideoFrames(VideoFrames),
 }
 
@@ -183,7 +192,6 @@ impl DatasetReader {
                 );
                 if !video_path.exists() {
                     panic!("Missing video file {}", video_path.display());
-                    return false;
                 }
             }
         }
