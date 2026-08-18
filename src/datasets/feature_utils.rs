@@ -37,6 +37,19 @@ pub fn check_delta_timestamps(
     Ok(())
 }
 
+/// Convert delta timestamps in seconds to delta indices in frames.
+///
+/// Each timestamp offset is multiplied by `fps` and rounded to the nearest
+/// frame index.
+///
+/// # Arguments
+///
+/// * `delta_timestamps` - Timestamp offsets, in seconds, grouped by feature key.
+/// * `fps` - Dataset frame rate, in frames per second.
+///
+/// # Returns
+///
+/// Returns the corresponding relative frame indices, grouped by feature key.
 pub fn get_delta_indices(delta_timestamps: &DeltaTimestamps, fps: f32) -> DeltaIndices {
     delta_timestamps
         .iter()

@@ -6,15 +6,22 @@ use ndarray::{ArrayView3, ShapeError};
 use std::path::Path;
 use thiserror::Error;
 
+/// Collection of decoded RGB video frames.
+///
+/// Frames are stored in RGB24 format using HWC layout and row-major order.
 #[derive(Debug, Clone)]
 pub struct VideoFrames {
-    /// Each frame is RGB24, HWC, row-major.
+    /// Decoded video frames.
     ///
-    /// Shape per frame: [height, width, 3]
-    /// Values are u8 in [0, 255].
+    /// Each frame has shape `[height, width, 3]`, with `u8` values in the range `[0, 255]`.
     pub frames: Vec<VideoFrameRgb>,
+    /// Frame height, in pixels.
     pub height: usize,
+    /// Frame width, in pixels.
     pub width: usize,
+    /// Number of color channels per frame.
+    ///
+    /// For RGB24 frames, this value is expected to be `3`.
     pub channels: usize,
 }
 
@@ -96,7 +103,7 @@ pub fn decode_video_frames(
     let backend = backend.unwrap_or(VideoBackend::Ffmpeg);
 
     match backend {
-        VideoBackend::Ffmpeg => decode_video_frames_ffmpeg(&video_path, timestamps, tolerance_s),
+        VideoBackend::Ffmpeg => decode_video_frames_ffmpeg(video_path, timestamps, tolerance_s),
     }
 }
 
@@ -178,10 +185,26 @@ pub fn decode_video_frames_ffmpeg(
 
     queries.sort_by(|a, b| a.ts.total_cmp(&b.ts));
 
+    let decode_context = DecodeContext {
+        time_base,
+        width,
+        height,
+        decode_until_s,
+        tolerance_s,
+        queries: &queries,
+        requested_timestamps: timestamps,
+    };
+
     // Retrieve frames for each value in timestamps
     let mut selected_frames: Vec<Option<VideoFrameRgb>> = vec![None; timestamps.len()];
     let mut best_distances = vec![f64::INFINITY; timestamps.len()];
     let mut found_frames = vec![false; timestamps.len()];
+
+    let mut selection = FrameSelection {
+        selected_frames: &mut selected_frames,
+        best_distances: &mut best_distances,
+        found_frames: &mut found_frames,
+    };
 
     // Get frames between first and last ts
     for (packet_stream, packet) in input.packets() {
@@ -196,16 +219,8 @@ pub fn decode_video_frames_ffmpeg(
         let reached_end = receive_decoded_frames_rgb24(
             &mut decoder,
             &mut scaler,
-            time_base,
-            width,
-            height,
-            decode_until_s,
-            tolerance_s,
-            &queries,
-            timestamps,
-            &mut selected_frames,
-            &mut best_distances,
-            &mut found_frames,
+            &decode_context,
+            &mut selection,
         )?;
 
         if reached_end {
@@ -217,20 +232,7 @@ pub fn decode_video_frames_ffmpeg(
         .send_eof()
         .map_err(|err| VideoDecodeError::Ffmpeg(err.to_string()))?;
 
-    receive_decoded_frames_rgb24(
-        &mut decoder,
-        &mut scaler,
-        time_base,
-        width,
-        height,
-        decode_until_s,
-        tolerance_s,
-        &queries,
-        timestamps,
-        &mut selected_frames,
-        &mut best_distances,
-        &mut found_frames,
-    )?;
+    receive_decoded_frames_rgb24(&mut decoder, &mut scaler, &decode_context, &mut selection)?;
 
     let has_missing = found_frames.iter().any(|&found| !found);
     let has_bad_distances = best_distances.iter().any(|&dist| dist > tolerance_s);
@@ -278,19 +280,27 @@ fn stream_ts_to_seconds(ts: i64, time_base: ffmpeg::Rational) -> f64 {
     ts as f64 * time_base.numerator() as f64 / time_base.denominator() as f64
 }
 
-fn receive_decoded_frames_rgb24(
-    decoder: &mut ffmpeg::decoder::Video,
-    scaler: &mut Context,
+struct DecodeContext<'a> {
     time_base: ffmpeg::Rational,
     width: usize,
     height: usize,
     decode_until_s: f64,
     tolerance_s: f64,
-    queries: &[QueryTimestamp],
-    requested_timestamps: &[f64],
-    selected_frames: &mut [Option<VideoFrameRgb>],
-    best_distances: &mut [f64],
-    found_frames: &mut [bool],
+    queries: &'a [QueryTimestamp],
+    requested_timestamps: &'a [f64],
+}
+
+struct FrameSelection<'a> {
+    selected_frames: &'a mut [Option<VideoFrameRgb>],
+    best_distances: &'a mut [f64],
+    found_frames: &'a mut [bool],
+}
+
+fn receive_decoded_frames_rgb24(
+    decoder: &mut ffmpeg::decoder::Video,
+    scaler: &mut Context,
+    ctx: &DecodeContext<'_>,
+    selection: &mut FrameSelection<'_>,
 ) -> Result<bool, VideoDecodeError> {
     let mut decoded = Video::empty();
     let mut rgb_frame = Video::empty();
@@ -301,17 +311,17 @@ fn receive_decoded_frames_rgb24(
             continue;
         };
 
-        let ts = stream_ts_to_seconds(pts, time_base);
+        let ts = stream_ts_to_seconds(pts, ctx.time_base);
 
-        if ts > decode_until_s {
+        if ts > ctx.decode_until_s {
             return Ok(true);
         }
 
-        let lower_ts = ts - tolerance_s;
-        let upper_ts = ts + tolerance_s;
+        let lower_ts = ts - ctx.tolerance_s;
+        let upper_ts = ts + ctx.tolerance_s;
 
-        let lower = queries.partition_point(|q| q.ts < lower_ts);
-        let upper = queries.partition_point(|q| q.ts <= upper_ts);
+        let lower = ctx.queries.partition_point(|q| q.ts < lower_ts);
+        let upper = ctx.queries.partition_point(|q| q.ts <= upper_ts);
 
         if lower == upper {
             continue;
@@ -320,11 +330,11 @@ fn receive_decoded_frames_rgb24(
         improved_indices.clear();
 
         // Determine whether frame is closest to some query
-        for query in &queries[lower..upper] {
+        for query in &ctx.queries[lower..upper] {
             let original_index = query.original_index;
             let dist = (query.ts - ts).abs();
 
-            if dist < best_distances[original_index] {
+            if dist < selection.best_distances[original_index] {
                 improved_indices.push((original_index, dist));
             }
         }
@@ -337,18 +347,18 @@ fn receive_decoded_frames_rgb24(
             .run(&decoded, &mut rgb_frame)
             .map_err(|err| VideoDecodeError::Ffmpeg(err.to_string()))?;
 
-        let frame_data = rgb24_frame_to_hcw_u8(&rgb_frame, width, height);
+        let frame_data = rgb24_frame_to_hcw_u8(&rgb_frame, ctx.width, ctx.height);
 
         for &(original_index, dist) in &improved_indices {
-            selected_frames[original_index] = Some(VideoFrameRgb {
+            selection.selected_frames[original_index] = Some(VideoFrameRgb {
                 data: frame_data.clone(),
                 timestamp_s: ts,
-                requested_timestamp_s: requested_timestamps[original_index],
+                requested_timestamp_s: ctx.requested_timestamps[original_index],
                 distance_s: dist,
             });
 
-            best_distances[original_index] = dist;
-            found_frames[original_index] = true;
+            selection.best_distances[original_index] = dist;
+            selection.found_frames[original_index] = true;
         }
     }
 

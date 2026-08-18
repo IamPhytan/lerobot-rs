@@ -99,7 +99,7 @@ impl LeRobotDatasetMetadata {
 
     /// Hugging Face Hub URL root for this dataset.
     pub fn url_root(&self) -> String {
-        format!("hf://datasets/{}", &self.repo_id.as_str())
+        format!("hf://datasets/{}", self.repo_id.as_str())
     }
 
     /// Codebase version used to create this dataset.
@@ -218,7 +218,7 @@ impl LeRobotDatasetMetadata {
 
     /// Robot type used in recording this dataset.
     pub fn robot_type(&self) -> Option<&str> {
-        Some(&self.info.robot_type.as_str())
+        Some(self.info.robot_type.as_str())
     }
 
     /// Frames per second used during data collection.
@@ -233,7 +233,7 @@ impl LeRobotDatasetMetadata {
 
     fn get_keys_by_filter(&self, filter_values: Vec<&str>) -> Vec<String> {
         self.features()
-            .unwrap_or(HashMap::new())
+            .unwrap_or_default()
             .iter()
             .filter_map(|(key, ft)| {
                 if filter_values.contains(&ft.dtype.as_str()) {
@@ -263,7 +263,7 @@ impl LeRobotDatasetMetadata {
     /// Names of the various dimensions of vector modalities.
     pub fn names(&self) -> HashMap<String, Option<utils::DatasetFeatureNames>> {
         self.features()
-            .unwrap_or(HashMap::new())
+            .unwrap_or_default()
             .iter()
             .map(|(key, ft)| (key.clone(), ft.names.clone()))
             .collect()
@@ -272,7 +272,7 @@ impl LeRobotDatasetMetadata {
     /// Shapes for the different features.
     pub fn shapes(&self) -> HashMap<String, Vec<usize>> {
         self.features()
-            .unwrap_or(HashMap::new())
+            .unwrap_or_default()
             .iter()
             .map(|(key, ft)| (key.clone(), ft.shape.clone()))
             .collect()
@@ -354,17 +354,16 @@ impl LeRobotDatasetMetadata {
 pub struct LeRobotDataset {
     /// Repository identifier (e.g. ``'lerobot/aloha_sim'``).
     pub repo_id: String,
-    /// Metadata associated to the dataset.
+    /// Metadata associated with the dataset.
     pub meta: LeRobotDatasetMetadata,
     /// Dataset reader used to access the dataset contents.
     reader: DatasetReader,
-    episodes: Option<Vec<usize>>,
 }
 
 impl LeRobotDataset {
     /// Creates a new LeRobot dataset.
     ///
-    /// The dataset metadata is loaded from the local dataset directory and a [`DatasetReader`] is initialized for the requested episodes.
+    /// The dataset metadata is loaded from the local dataset directory and a DatasetReader is initialized for the requested episodes.
     ///
     /// # Arguments
     ///
@@ -408,13 +407,12 @@ impl LeRobotDataset {
             repo_id: repo_id.to_string(),
             meta,
             reader,
-            episodes,
         }
     }
 
     /// Local directory for the dataset.
     pub fn root(&self) -> &Path {
-        &self.meta.root.as_path()
+        self.meta.root.as_path()
     }
 
     /// Frames per second used during data collection.
@@ -439,7 +437,7 @@ impl LeRobotDataset {
 
     /// The underlying Hugging Face LeRobot Dataset
     pub fn hf_dataset(&mut self) -> &pl::frame::DataFrame {
-        if self.reader.hf_dataset == None {
+        if self.reader.hf_dataset.is_none() {
             self.reader.try_load();
         }
         self.reader

@@ -1,7 +1,6 @@
-use crate::lerobot::{DatasetItem, DatasetItemValue, VideoFrames};
 use crate::lerobot_cli::DatasetVizMode;
-use anyhow;
 use lerobot::LeRobotDataset;
+use lerobot::{DatasetItem, DatasetItemValue, VideoFrames};
 use num_traits::cast::NumCast;
 use pl::polars_utils::float::IsFloat;
 use polars as pl;

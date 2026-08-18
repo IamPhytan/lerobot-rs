@@ -1,9 +1,12 @@
-use lerobot;
+//! Command-line interface for the `lerobot` crate.
 
 mod lerobot_cli;
-mod lerobot_dataset_viz;
+
 use clap::Parser;
 use lerobot_cli::LeRobotCli;
+
+#[cfg(feature = "viz")]
+mod lerobot_dataset_viz;
 
 fn main() {
     let cli = LeRobotCli::parse();
@@ -26,27 +29,18 @@ fn main() {
                 dataset.root().display()
             );
 
+            println!("\n========================= METADATA =========================\n");
+
             println!("Dataset metadata: {:?}", dataset.meta.info);
             println!("Dataset statistics: {:?}", dataset.meta.stats);
             println!("Dataset tasks: {}", dataset.meta.tasks);
             println!("Dataset subtasks: {:?}", dataset.meta.subtasks);
             println!("Dataset episodes: {:?}", dataset.meta.episodes);
-
-            let task_index = dataset.meta.get_task_index("put the white mug on the left plate and put the yellow and white mug on the right plate");
-
-            println!("{task_index:?}");
-
-            println!("{:?}", dataset);
-
-            println!("=========================");
-            println!("{:?}", dataset.meta.episodes);
         }
         #[cfg(feature = "viz")]
         lerobot_cli::Command::DatasetViz {
             repo,
             episode_index,
-            batch_size,
-            num_workers,
             mode,
             tolerance_s,
         } => {
@@ -59,7 +53,7 @@ fn main() {
                 None,
             );
 
-            lerobot_dataset_viz::visualize_dataset(&dataset, episode_index as usize, mode);
+            let _ = lerobot_dataset_viz::visualize_dataset(&dataset, episode_index as usize, mode);
         }
     }
 }

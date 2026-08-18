@@ -94,12 +94,9 @@ impl DatasetReader {
     }
 
     pub fn try_load(&mut self) -> bool {
-        self.hf_dataset = match self.load_hf_dataset() {
-            Ok(value) => Some(value),
-            _ => None,
-        };
+        self.hf_dataset = self.load_hf_dataset().ok();
 
-        return self.check_cached_episodes_sufficient();
+        self.check_cached_episodes_sufficient()
     }
 
     pub fn load_hf_dataset(&self) -> Result<pl::frame::DataFrame, FileError> {
@@ -153,7 +150,7 @@ impl DatasetReader {
     }
 
     fn check_cached_episodes_sufficient(&self) -> bool {
-        if (self.hf_dataset == None) && (self.len() == 0) {
+        if (self.hf_dataset.is_none()) && (self.is_empty()) {
             return false;
         }
 
@@ -168,15 +165,12 @@ impl DatasetReader {
             .u32()
             .expect("Episode indices cannot be converted to u32")
             .iter()
-            .filter_map(|x| match x {
-                Some(v) => Some(v as usize),
-                None => None,
-            })
+            .filter_map(|x| x.map(|v| v as usize))
             .collect::<Vec<usize>>();
 
         let requested_episodes: HashSet<usize> = match &self.episodes {
             Some(episodes) => HashSet::from_iter(episodes.clone()),
-            None => HashSet::from_iter((0..self.meta.info.total_episodes).into_iter()),
+            None => HashSet::from_iter(0..self.meta.info.total_episodes),
         };
 
         if !requested_episodes.is_subset(&HashSet::from_iter(available_episodes)) {
@@ -196,32 +190,32 @@ impl DatasetReader {
             }
         }
 
-        return true;
+        true
     }
 
-    fn collect_relatives_indices(&self, absolute_indices: &Vec<usize>) -> Vec<usize> {
+    fn collect_relatives_indices(&self, absolute_indices: &[usize]) -> Vec<usize> {
         if let Some(abs_to_rel) = &self.absolute_to_relative_idx {
             absolute_indices
                 .iter()
                 .map(|idx| {
-                    *abs_to_rel.get(idx).expect(
-                        format!(
+                    *abs_to_rel.get(idx).unwrap_or_else(|| {
+                        panic!(
                             "absolute index {} missing from absolute_to_relative_idx",
                             idx
                         )
-                        .as_str(),
-                    )
+                    })
                 })
                 .collect()
         } else {
-            absolute_indices.clone()
+            absolute_indices.to_owned()
         }
     }
 
+    /// Return deduplicated file paths (data + video) for selected episodes.
     pub fn get_episodes_file_paths(&self) -> Vec<PathBuf> {
         let requested_episodes: HashSet<usize> = match &self.episodes {
             Some(episodes) => HashSet::from_iter(episodes.clone()),
-            None => HashSet::from_iter((0..self.meta.info.total_episodes).into_iter()),
+            None => HashSet::from_iter(0..self.meta.info.total_episodes),
         };
 
         let mut fpaths = requested_episodes
@@ -233,20 +227,42 @@ impl DatasetReader {
             .meta
             .video_keys()
             .iter()
-            .map(|vid_key| {
+            .flat_map(|vid_key| {
                 requested_episodes
                     .iter()
                     .filter_map(|&ep_idx| self.meta.get_video_file_path(ep_idx, vid_key))
                     .collect::<Vec<PathBuf>>()
             })
-            .flatten()
             .collect::<Vec<PathBuf>>();
 
         fpaths.extend(video_fpaths);
 
-        return fpaths;
+        fpaths
     }
 
+    /// Compute query indices for delta timestamps.
+    ///
+    /// For each configured delta index, the offset is applied to `abs_idx`.
+    /// Resulting indices are clamped to the bounds of episode `ep_idx`.
+    ///
+    /// A padding mask marks entries whose original, unclamped index fell outside
+    /// the episode bounds.
+    ///
+    /// # Arguments
+    ///
+    /// * `abs_idx` - Absolute dataset index of the current item.
+    /// * `ep_idx` - Episode index containing the current item.
+    ///
+    /// # Returns
+    ///
+    /// Returns the query indices and their associated padding masks.
+    ///
+    /// If no delta indices are configured, both maps are empty.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the episode metadata cannot be found or if its
+    /// `dataset_from_index` or `dataset_to_index` values cannot be read.
     fn get_query_indices(
         &self,
         abs_idx: usize,
@@ -404,16 +420,17 @@ impl DatasetReader {
                 query_ts.iter().map(|ts| from_timestamp + ts).collect();
 
             // Get video file path for ep_idx and vid_key
-            let video_rel_path = self.meta.get_video_file_path(ep_idx, vid_key).expect(
-                format!(
-                    "Could not get video file path for episode {} and video key {}",
-                    ep_idx, vid_key
-                )
-                .as_str(),
-            );
+            let video_rel_path = self
+                .meta
+                .get_video_file_path(ep_idx, vid_key)
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Could not get video file path for episode {} and video key {}",
+                        ep_idx, vid_key
+                    )
+                });
             let video_path = self.meta.root.join(video_rel_path);
 
-            // TODO: decode_video_frames
             let frames = decode_video_frames(
                 &video_path,
                 &shifted_query_ts,
@@ -515,21 +532,21 @@ impl DatasetReader {
         item.insert("task".to_string(), DatasetItemValue::String(task));
 
         // Add subtask if available.
-        if self.meta.info.features.contains_key("subtask_index") {
-            if let Some(subtasks) = &self.meta.subtasks {
-                let subtask_idx = dataset
-                    .column("subtask_index")?
-                    .get(idx)?
-                    .try_extract::<u32>()? as usize;
+        if self.meta.info.features.contains_key("subtask_index")
+            && let Some(subtasks) = &self.meta.subtasks
+        {
+            let subtask_idx = dataset
+                .column("subtask_index")?
+                .get(idx)?
+                .try_extract::<u32>()? as usize;
 
-                let subtask = subtasks
-                    .column("subtask")?
-                    .get(subtask_idx)?
-                    .str_value()
-                    .into_owned();
+            let subtask = subtasks
+                .column("subtask")?
+                .get(subtask_idx)?
+                .str_value()
+                .into_owned();
 
-                item.insert("subtask".to_string(), DatasetItemValue::String(subtask));
-            }
+            item.insert("subtask".to_string(), DatasetItemValue::String(subtask));
         }
 
         Ok(item)

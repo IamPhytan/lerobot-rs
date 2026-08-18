@@ -1,5 +1,8 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+
+#[cfg(feature = "viz")]
+use clap::ValueEnum;
 
 #[derive(Parser, Debug)]
 pub struct RepoArgs {
@@ -35,14 +38,6 @@ pub enum Command {
         /// Episode to visualize
         #[arg(long, value_parser = clap::value_parser!(u64).range(0..))]
         episode_index: u64,
-
-        /// Batch size loaded by DataLoader.
-        #[arg(long, default_value_t = 32)]
-        batch_size: u32,
-
-        /// Number of processes of Dataloader for loading the data.
-        #[arg(long, default_value_t = 4)]
-        num_workers: u32,
 
         /// Mode of viewing between 'local' or 'distant'.
         /// 'local' requires data to be on a local machine. It spawns a viewer to visualize the data locally.

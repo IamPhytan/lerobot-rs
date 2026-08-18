@@ -1,13 +1,46 @@
-mod datasets;
-pub mod lerobot_dataset;
+//! # lerobot
+//!
+//! Rust utilities for loading and reading [LeRobot] datasets.
+//!
+//! This crate provides [`LeRobotDataset`] for accessing LeRobot datasets, their metadata, episodes, and associated video data.
+//!
+//! By default, datasets are expected under `~/.cache/huggingface/lerobot`, unless the `LEROBOT_HOME` environment variable is set.
+//!
+//! ## Examples
+//!
+//! ```no_run
+//! use lerobot::LeRobotDataset;
+//!
+//! let dataset = LeRobotDataset::new(
+//!     "lerobot/pusht",
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//!     None,
+//! );
+//!
+//! println!(
+//!     "Loaded dataset {} with {} items",
+//!     dataset.repo_id,
+//!     dataset.len()
+//! );
+//! ```
+//!
+//! [LeRobot]: https://github.com/huggingface/lerobot
+
+#![warn(missing_docs)]
 use std::env;
 use std::path::PathBuf;
+
+mod datasets;
+mod lerobot_dataset;
 mod types;
+
 pub use datasets::dataset_reader::DatasetItemValue;
 pub use datasets::video_utils::VideoFrames;
-pub use types::DatasetItem;
-
 pub use lerobot_dataset::LeRobotDataset;
+pub use types::DatasetItem;
 
 /// Returns the default local directory used to store LeRobot datasets.
 ///
