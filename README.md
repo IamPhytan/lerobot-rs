@@ -39,7 +39,7 @@ To use this library, simply add `lerobot` to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
-lerobot = "0.1.0"
+lerobot = "0.5.1"
 ```
 
 Datasets are loaded from `$LEROBOT_HOME/<repo_id>` or, when `LEROBOT_HOME` is not set, `~/.cache/huggingface/lerobot/<repo_id>`.
