@@ -62,3 +62,81 @@ pub fn get_delta_indices(delta_timestamps: &DeltaTimestamps, fps: f32) -> DeltaI
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{check_delta_timestamps, get_delta_indices};
+    use crate::types::DeltaTimestamps;
+    use std::collections::HashMap;
+
+    // Inspired by https://github.com/huggingface/lerobot/blob/main/tests/datasets/test_delta_timestamps.py
+
+    const FEATURE_KEYS: [&str; 2] = ["action", "state"];
+
+    fn valid_delta_timestamps(fps: u32, start: isize, end: isize) -> DeltaTimestamps {
+        FEATURE_KEYS
+            .iter()
+            .map(|key| {
+                let values = (start..end).map(|i| i as f64 / fps as f64).collect();
+                ((*key).to_string(), values)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn check_delta_timestamps_valid() {
+        let fps = 30.0;
+        let tolerance_s = 1e-4;
+        let delta_timestamps = valid_delta_timestamps(fps as u32, -10, 10);
+
+        assert!(check_delta_timestamps(&delta_timestamps, fps, tolerance_s).is_ok());
+    }
+
+    #[test]
+    fn check_delta_timestamps_slightly_off() {
+        let fps = 30.0;
+        let tolerance_s = 1e-4;
+        let mut delta_timestamps = valid_delta_timestamps(fps as u32, -10, 10);
+
+        for timestamps in delta_timestamps.values_mut() {
+            timestamps[3] += tolerance_s * 0.9;
+            let len = timestamps.len();
+            timestamps[len - 3] += tolerance_s * 0.9;
+        }
+
+        assert!(check_delta_timestamps(&delta_timestamps, fps, tolerance_s).is_ok());
+    }
+
+    #[test]
+    fn check_delta_timestamps_invalid() {
+        let fps = 30.0;
+        let tolerance_s = 1e-4;
+        let mut delta_timestamps = valid_delta_timestamps(fps as u32, -10, 10);
+
+        for timestamps in delta_timestamps.values_mut() {
+            timestamps[3] += tolerance_s * 1.1;
+        }
+
+        assert!(check_delta_timestamps(&delta_timestamps, fps, tolerance_s).is_err());
+    }
+
+    #[test]
+    fn check_delta_timestamps_empty() {
+        let delta_timestamps = HashMap::new();
+
+        assert!(check_delta_timestamps(&delta_timestamps, 30.0, 1e-4).is_ok());
+    }
+
+    #[test]
+    fn delta_indices() {
+        let fps = 50;
+        let delta_timestamps = valid_delta_timestamps(fps, -100, 100);
+
+        let expected = FEATURE_KEYS
+            .iter()
+            .map(|key| ((*key).to_string(), (-100..100).collect::<Vec<isize>>()))
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(expected, get_delta_indices(&delta_timestamps, fps as f32));
+    }
+}
