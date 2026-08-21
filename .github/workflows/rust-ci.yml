@@ -1,0 +1,168 @@
+name: Continuous Integration
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+  build-and-test:
+    name: build & test (${{ matrix.os }}, ${{ matrix.features }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            features: core
+            cargo_flags: --no-default-features
+
+          - os: ubuntu-latest
+            features: viz
+            cargo_flags: --no-default-features --features viz
+
+          - os: macos-latest
+            features: core
+            cargo_flags: --no-default-features
+
+          - os: macos-latest
+            features: viz
+            cargo_flags: --no-default-features --features viz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install ffmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libavfilter-dev \
+            libavdevice-dev \
+            libswscale-dev \
+            libswresample-dev \
+            pkg-config \
+            clang \
+            libclang-dev
+      - name: Install ffmpeg (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg pkg-config
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: cargo build --locked --verbose ${{ matrix.cargo_flags }}
+      - name: Run tests
+        run: cargo test --locked --verbose ${{ matrix.cargo_flags }}
+
+  clippy:
+    name: clippy (${{ matrix.features }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - features: core
+            cargo_flags: --no-default-features
+          - features: viz
+            cargo_flags: --no-default-features --features viz
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install ffmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ffmpeg \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libavfilter-dev \
+            libavdevice-dev \
+            libswscale-dev \
+            libswresample-dev \
+            pkg-config \
+            clang \
+            libclang-dev
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - name: Run Clippy
+        run: >
+          cargo clippy
+          --locked
+          --all-targets
+          ${{ matrix.cargo_flags }}
+          --
+          -D warnings
+
+  rustdoc:
+    name: rustdoc (${{ matrix.features }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - features: core
+            cargo_flags: --no-default-features
+
+          - features: viz
+            cargo_flags: --no-default-features --features viz
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v7
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+    - name: Install ffmpeg
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          ffmpeg \
+          libavcodec-dev \
+          libavformat-dev \
+          libavutil-dev \
+          libavfilter-dev \
+          libavdevice-dev \
+          libswscale-dev \
+          libswresample-dev \
+          pkg-config \
+          clang \
+          libclang-dev
+    - name: Cache Rust build
+      uses: Swatinem/rust-cache@v2
+    - name: Check documentation
+      env:
+        RUSTDOCFLAGS: "-D warnings"
+      run: >
+        cargo doc
+        --locked
+        --no-deps
+        ${{ matrix.cargo_flags }}
