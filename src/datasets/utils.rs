@@ -8,14 +8,15 @@ use serde_json::Value;
 use std::{collections::HashMap, error, fmt, fs::File, io, path::Path, path::PathBuf};
 
 pub trait PathGlob {
-    fn glob(&self, pattern: &str) -> glob::Paths;
+    fn glob(&self, pattern: &str) -> Result<glob::Paths, FileError>;
 }
 
 impl PathGlob for Path {
-    fn glob(&self, pattern: &str) -> glob::Paths {
+    fn glob(&self, pattern: &str) -> Result<glob::Paths, FileError> {
         let path_pattern = self.join(pattern);
-        glob::glob(path_pattern.to_str().expect("Invalid UTF-8 in path"))
-            .expect("Invalid glob pattern")
+        let path_pattern = path_pattern.to_str().ok_or(FileError::PathEncoding)?;
+
+        Ok(glob::glob(path_pattern)?)
     }
 }
 
@@ -25,6 +26,7 @@ pub enum FileError {
     Json(serde_json::Error),
     Polars(pl::error::PolarsError),
     Glob(glob::GlobError),
+    GlobPattern(glob::PatternError),
     PathEncoding,
 }
 
@@ -52,6 +54,12 @@ impl From<glob::GlobError> for FileError {
     }
 }
 
+impl From<glob::PatternError> for FileError {
+    fn from(err: glob::PatternError) -> Self {
+        FileError::GlobPattern(err)
+    }
+}
+
 impl fmt::Display for FileError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -59,6 +67,7 @@ impl fmt::Display for FileError {
             FileError::Json(e) => write!(f, "JSON error: {}", e),
             FileError::Polars(e) => write!(f, "Polars error: {}", e),
             FileError::Glob(e) => write!(f, "Glob error: {}", e),
+            FileError::GlobPattern(e) => write!(f, "Glob Pattern Error {}", e),
             FileError::PathEncoding => write!(f, "Path is not valid UTF-8"),
         }
     }
@@ -71,6 +80,7 @@ impl error::Error for FileError {
             FileError::Json(e) => Some(e),
             FileError::Polars(e) => Some(e),
             FileError::Glob(e) => Some(e),
+            FileError::GlobPattern(e) => Some(e),
             FileError::PathEncoding => None,
         }
     }
@@ -179,28 +189,38 @@ pub fn load_episodes<P: AsRef<Path>>(path: P) -> Result<pl::frame::DataFrame, Fi
 
     let files = path
         .as_ref()
-        .glob("**/*.parquet")
-        .map(|p| p.expect("Error reading file {p}"))
-        .collect::<Vec<PathBuf>>();
+        .glob("**/*.parquet")?
+        .collect::<Result<Vec<PathBuf>, _>>()?;
+
+    if files.is_empty() {
+        return Err(FileError::Io(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "No episode parquet files found in {}",
+                path.as_ref().display()
+            ),
+        )));
+    }
 
     let episodes = files
         .iter()
         .map(|fpath| {
-            LazyFrame::scan_parquet(
-                PlPath::new(fpath.to_str().expect("Polars Path error")),
-                Default::default(),
-            )
-            .map_err(FileError::from)
-            .unwrap_or_else(|_| panic!("Error while scanning parquet file {:?}", fpath))
-            .with_columns([
-                col("episode_index").cast(DataType::UInt32),
-                col("data/chunk_index").cast(DataType::UInt32),
-                col("data/file_index").cast(DataType::UInt32),
-                col("dataset_from_index").cast(DataType::UInt32),
-                col("dataset_to_index").cast(DataType::UInt32),
-            ])
+            let fpath = fpath.to_str().ok_or(FileError::PathEncoding)?;
+
+            let frame = LazyFrame::scan_parquet(PlPath::new(fpath), Default::default())
+                .map_err(FileError::from)
+                .unwrap_or_else(|_| panic!("Error while scanning parquet file {:?}", fpath))
+                .with_columns([
+                    col("episode_index").cast(DataType::UInt32),
+                    col("data/chunk_index").cast(DataType::UInt32),
+                    col("data/file_index").cast(DataType::UInt32),
+                    col("dataset_from_index").cast(DataType::UInt32),
+                    col("dataset_to_index").cast(DataType::UInt32),
+                ]);
+
+            Ok(frame)
         })
-        .collect::<Vec<LazyFrame>>();
+        .collect::<Result<Vec<LazyFrame>, FileError>>()?;
 
     let all_episodes = concat(episodes, UnionArgs::default())?.collect()?;
 
