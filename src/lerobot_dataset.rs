@@ -61,31 +61,24 @@ impl LeRobotDatasetMetadata {
     ///
     /// The `meta/subtasks.parquet` file is optional.
     pub fn new(repo_id: &str, root: PathBuf, revision: Option<&str>) -> Self {
-        let revision = revision.unwrap_or("main").to_string();
+        Self::try_new(repo_id, root, revision).expect("Failed to load LeRobot dataset metadata")
+    }
 
-        // Load metadata
+    pub fn try_new(
+        repo_id: &str,
+        root: PathBuf,
+        revision: Option<&str>,
+    ) -> Result<Self, FileError> {
+        let revision = revision.unwrap_or("main").to_string();
         let meta_dir = root.join("meta");
 
-        // Info
-        let info =
-            utils::load_info(meta_dir.join("info.json")).expect("Error while reading dataset info");
-
-        // Tasks
-        let tasks = utils::load_tasks(meta_dir.join("tasks.parquet"))
-            .expect("Error while reading dataset tasks");
-
-        // Subtasks
+        let info = utils::load_info(meta_dir.join("info.json"))?;
+        let tasks = utils::load_tasks(meta_dir.join("tasks.parquet"))?;
         let subtasks = utils::load_subtasks(meta_dir.join("subtasks.parquet"));
+        let episodes = utils::load_episodes(meta_dir.join("episodes"))?;
+        let stats = utils::load_stats(meta_dir.join("stats.json"))?;
 
-        // Episodes
-        let episodes = utils::load_episodes(meta_dir.join("episodes"))
-            .expect("Error while reading dataset episodes");
-
-        // Stats
-        let stats = utils::load_stats(meta_dir.join("stats.json"))
-            .expect("Error while reading dataset stats");
-
-        Self {
+        Ok(Self {
             repo_id: repo_id.to_string(),
             root,
             revision,
@@ -94,7 +87,7 @@ impl LeRobotDatasetMetadata {
             subtasks,
             episodes,
             stats,
-        }
+        })
     }
 
     /// Hugging Face Hub URL root for this dataset.
