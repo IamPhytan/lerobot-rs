@@ -19,7 +19,19 @@ pub fn visualize_dataset(
     let repo_id = dataset.repo_id.to_string();
     let _spawn_local_viewer = mode == DatasetVizMode::Local;
 
-    let rec_builder = rr::RecordingStreamBuilder::new(format!("{repo_id}/episode_{episode_index}"));
+    let app_id: String = format!("{repo_id}_episode_{episode_index}")
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || "_- []:".contains(c) {
+                c
+            } else {
+                '-'
+            }
+        })
+        .collect();
+
+    let app_id = rr::ApplicationId::try_new(app_id)?;
+    let rec_builder = rr::RecordingStreamBuilder::new(app_id);
 
     let rec = match mode {
         DatasetVizMode::Local => rec_builder.spawn()?,
