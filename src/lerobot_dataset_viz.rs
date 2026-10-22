@@ -16,6 +16,11 @@ pub fn visualize_dataset(
 ) -> anyhow::Result<()> {
     rr::external::re_log::setup_logging();
 
+    anyhow::ensure!(
+        !dataset.is_empty(),
+        "no frames loaded for episode {episode_index} (load failed or episode missing)"
+    );
+
     let repo_id = dataset.repo_id.to_string();
     let _spawn_local_viewer = mode == DatasetVizMode::Local;
 

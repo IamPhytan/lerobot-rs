@@ -53,7 +53,9 @@ fn main() {
                 None,
             );
 
-            let _ = lerobot_dataset_viz::visualize_dataset(&dataset, episode_index as usize, mode);
+            if let Err(e) = lerobot_dataset_viz::visualize_dataset(&dataset, episode_index as usize, mode) {
+                eprintln!("dataset-viz failed: {e:?}");
+            }
         }
     }
 }

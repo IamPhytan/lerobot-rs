@@ -94,7 +94,13 @@ impl DatasetReader {
     }
 
     pub fn try_load(&mut self) -> bool {
-        self.hf_dataset = self.load_hf_dataset().ok();
+        self.hf_dataset = match self.load_hf_dataset() {
+            Ok(df) => Some(df),
+            Err(e) => {
+                eprintln!("Failed to load hf_dataset: {e:?}");
+                None
+            }
+        };
 
         self.check_cached_episodes_sufficient()
     }
@@ -143,7 +149,7 @@ impl DatasetReader {
             .collect::<Vec<LazyFrame>>();
 
         let all_data = concat(data, UnionArgs::default())?
-            .filter(col("episode_index").is_in(lit(requested_episodes), false))
+            .filter(col("episode_index").is_in(lit(requested_episodes).implode(), false))
             .collect()?;
 
         Ok(all_data)
