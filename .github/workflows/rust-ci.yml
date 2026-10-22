@@ -70,7 +70,10 @@ jobs:
             libclang-dev
       - name: Install ffmpeg (macOS)
         if: runner.os == 'macOS'
-        run: brew install ffmpeg pkg-config
+        run: |
+          brew install ffmpeg@8 pkg-config
+          echo "$(brew --prefix ffmpeg@8)/bin" >> "$GITHUB_PATH"
+          echo "PKG_CONFIG_PATH=$(brew --prefix ffmpeg@8)/lib/pkgconfig" >> "$GITHUB_ENV"
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
       - name: Build
