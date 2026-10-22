@@ -4,7 +4,7 @@ use crate::types::{DatasetItem, DeltaTimestamps};
 use polars as pl;
 use polars::error::PolarsResult;
 use polars::lazy::prelude::LazyFrame;
-use polars::prelude::{IntoLazy, col, lit};
+use polars::prelude::{DataType, IntoLazy, col, lit};
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -123,23 +123,11 @@ impl LeRobotDatasetMetadata {
         Some(ep)
     }
 
-    fn get_chunk_index(&self, ep: LazyFrame) -> Option<u32> {
-        ep.select([col("data/chunk_index")])
+    fn get_index(&self, ep: LazyFrame, column: &str) -> Option<u32> {
+        ep.select([col(column).cast(DataType::UInt32)])
             .collect()
             .ok()?
-            .column("data/chunk_index")
-            .map_err(FileError::from)
-            .ok()?
-            .u32()
-            .ok()?
-            .get(0)
-    }
-
-    fn get_file_index(&self, ep: LazyFrame) -> Option<u32> {
-        ep.select([col("data/file_index")])
-            .collect()
-            .ok()?
-            .column("data/file_index")
+            .column(column)
             .map_err(FileError::from)
             .ok()?
             .u32()
@@ -159,8 +147,8 @@ impl LeRobotDatasetMetadata {
     /// or `None` if the episode, chunk index, or file index cannot be found.
     pub fn get_data_file_path(&self, ep_index: usize) -> Option<PathBuf> {
         let ep = self.get_episode(ep_index)?;
-        let chunk_index = self.get_chunk_index(ep.clone())?;
-        let file_index = self.get_file_index(ep.clone())?;
+        let chunk_index = self.get_index(ep.clone(), "data/chunk_index")?;
+        let file_index = self.get_index(ep.clone(), "data/file_index")?;
 
         let formatted_data_path = self
             .data_path()
@@ -183,8 +171,8 @@ impl LeRobotDatasetMetadata {
     /// or `None` if the episode, chunk index, file index, or video path cannot be found.
     pub fn get_video_file_path(&self, ep_index: usize, vid_key: &str) -> Option<PathBuf> {
         let ep = self.get_episode(ep_index)?;
-        let chunk_index = self.get_chunk_index(ep.clone())?;
-        let file_index = self.get_file_index(ep.clone())?;
+        let chunk_index = self.get_index(ep.clone(), &format!("videos/{vid_key}/chunk_index"))?;
+        let file_index = self.get_index(ep.clone(), &format!("videos/{vid_key}/file_index"))?;
 
         let formatted_video_path = self
             .video_path()?
