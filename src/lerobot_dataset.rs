@@ -326,6 +326,89 @@ impl LeRobotDatasetMetadata {
     }
 }
 
+/// Builder for creating a [`LeRobotDataset`] with optional configuration.
+///
+/// Required: `repo_id`. All other options have the same defaults as
+/// [`LeRobotDataset::new`]. Loading is deferred until [`LeRobotDatasetBuilder::build`].
+pub struct LeRobotDatasetBuilder {
+    repo_id: String,
+    root: Option<PathBuf>,
+    episodes: Option<Vec<usize>>,
+    delta_timestamps: Option<DeltaTimestamps>,
+    tolerance_s: f64,
+    revision: Option<String>,
+}
+
+impl LeRobotDatasetBuilder {
+    /// Start configuring a local LeRobot dataset.
+    pub fn new(repo_id: impl Into<String>) -> Self {
+        Self {
+            repo_id: repo_id.into(),
+            root: None,
+            episodes: None,
+            delta_timestamps: None,
+            tolerance_s: 1e-4,
+            revision: None,
+        }
+    }
+
+    /// Override the default root (`$HF_LEROBOT_HOME/{repo_id}`).
+    pub fn with_root(mut self, root: impl Into<PathBuf>) -> Self {
+        self.root = Some(root.into());
+        self
+    }
+
+    /// Select a subset of episodes; by default, all episodes are used.
+    pub fn with_episodes(mut self, episodes: Vec<usize>) -> Self {
+        self.episodes = Some(episodes);
+        self
+    }
+
+    /// Set timestamp offsets used when reading temporally related data.
+    pub fn with_delta_timestamps(mut self, delta_timestamps: DeltaTimestamps) -> Self {
+        self.delta_timestamps = Some(delta_timestamps);
+        self
+    }
+
+    /// Set the timestamp matching tolerance in seconds (default: `1e-4`).
+    pub fn with_tolerance_s(mut self, tolerance_s: f64) -> Self {
+        self.tolerance_s = tolerance_s;
+        self
+    }
+
+    /// Set the metadata revision (default: `main`).
+    pub fn with_revision(mut self, revision: impl Into<String>) -> Self {
+        self.revision = Some(revision.into());
+        self
+    }
+
+    /// Load metadata, initialize the dataset reader, and return a dataset.
+    ///
+    /// Returns [`FileError`] if metadata cannot be read or parsed.
+    /// Reader loading retains the existing `DatasetReader::try_load` behavior.
+    pub fn build(self) -> Result<LeRobotDataset, FileError> {
+        let root = self
+            .root
+            .unwrap_or_else(|| crate::lerobot_home().join(&self.repo_id));
+        let meta = LeRobotDatasetMetadata::try_new(&self.repo_id, root, self.revision.as_deref())?;
+
+        let mut reader = DatasetReader::new(
+            meta.clone(),
+            self.episodes,
+            self.tolerance_s,
+            None,
+            self.delta_timestamps,
+        );
+        reader.try_load();
+
+        Ok(LeRobotDataset {
+            repo_id: self.repo_id,
+            meta,
+            reader,
+        })
+    }
+}
+
 /// Container for a LeRobot dataset.
 ///
 /// Similar to `LeRobotDataset` in [LeRobot](https://github.com/huggingface/lerobot).
@@ -369,26 +452,30 @@ impl LeRobotDataset {
         tolerance_s: Option<f64>,
         revision: Option<&str>,
     ) -> Self {
-        let dataset_root = root.unwrap_or_else(|| crate::lerobot_home().join(repo_id));
-        let meta = LeRobotDatasetMetadata::new(repo_id, dataset_root, revision);
-
-        let tolerance_s = tolerance_s.unwrap_or(1e-4);
-
-        // Dataset Reader
-        let mut reader = DatasetReader::new(
-            meta.clone(),
-            episodes.clone(),
-            tolerance_s,
-            None,
-            delta_timestamps,
-        );
-        reader.try_load();
-
-        Self {
+        LeRobotDatasetBuilder {
             repo_id: repo_id.to_string(),
-            meta,
-            reader,
+            root,
+            episodes,
+            delta_timestamps,
+            tolerance_s: tolerance_s.unwrap_or(1e-4),
+            revision: revision.map(str::to_owned),
         }
+        .build()
+        .expect("Failed to load LeRobot dataset metadata")
+    }
+
+    /// Configure a LeRobot dataset before reading its metadata or data.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let dataset = LeRobotDataset::builder("lerobot/pusht")
+    ///     .with_episodes(vec![0, 1, 2])
+    ///     .with_tolerance_s(1e-4)
+    ///     .build()?;
+    /// ```
+    pub fn builder(repo_id: impl Into<String>) -> LeRobotDatasetBuilder {
+        LeRobotDatasetBuilder::new(repo_id)
     }
 
     /// Local directory for the dataset.
@@ -500,5 +587,79 @@ impl<'a> IntoIterator for &'a LeRobotDataset {
 impl ExactSizeIterator for LeRobotDatasetIter<'_> {
     fn len(&self) -> usize {
         self.len.saturating_sub(self.idx)
+    }
+}
+
+#[cfg(test)]
+mod builder_tests {
+    use super::*;
+
+    #[test]
+    fn builder_defaults() {
+        let builder = LeRobotDataset::builder("example/dataset");
+
+        assert_eq!(builder.repo_id, "example/dataset");
+        assert!(builder.root.is_none());
+        assert!(builder.episodes.is_none());
+        assert!(builder.delta_timestamps.is_none());
+        assert_eq!(builder.tolerance_s, 1e-4);
+        assert!(builder.revision.is_none());
+    }
+
+    #[test]
+    fn builder_accepts_configuration_without_loading() {
+        let builder = LeRobotDataset::builder("example/dataset")
+            .with_root("/tmp/lerobot-test")
+            .with_episodes(vec![0, 2, 4])
+            .with_tolerance_s(1e-3)
+            .with_revision("v3.0");
+
+        assert_eq!(builder.root, Some(PathBuf::from("/tmp/lerobot-test")));
+        assert_eq!(builder.episodes, Some(vec![0, 2, 4]));
+        assert_eq!(builder.tolerance_s, 1e-3);
+        assert_eq!(builder.revision.as_deref(), Some("v3.0"));
+    }
+
+    #[test]
+    fn build_overrides_previous_configuration() {
+        let builder = LeRobotDataset::builder("test/dataset")
+            .with_episodes(vec![0, 1])
+            .with_episodes(vec![2, 3])
+            .with_tolerance_s(1e-3)
+            .with_tolerance_s(1e-2);
+
+        assert_eq!(builder.episodes, Some(vec![2, 3]));
+        assert_eq!(builder.tolerance_s, 1e-2);
+    }
+
+    #[test]
+    fn builder_accepts_empty_episodes() {
+        let builder = LeRobotDataset::builder("test/dataset").with_episodes(vec![]);
+        assert_eq!(builder.episodes, Some(vec![]));
+    }
+
+    #[test]
+    fn builder_returns_error_when_metadata_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let result = LeRobotDataset::builder("test/dataset")
+            .with_root(temp_dir.path())
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to load LeRobot dataset metadata")]
+    fn new_panics_when_metadata_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        LeRobotDataset::new(
+            "test/dataset",
+            Some(temp_dir.path().to_path_buf()),
+            None,
+            None,
+            None,
+            None,
+        );
     }
 }
