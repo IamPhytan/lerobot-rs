@@ -619,4 +619,47 @@ mod builder_tests {
         assert_eq!(builder.tolerance_s, 1e-3);
         assert_eq!(builder.revision.as_deref(), Some("v3.0"));
     }
+
+    #[test]
+    fn build_overrides_previous_configuration() {
+        let builder = LeRobotDataset::builder("test/dataset")
+            .with_episodes(vec![0, 1])
+            .with_episodes(vec![2, 3])
+            .with_tolerance_s(1e-3)
+            .with_tolerance_s(1e-2);
+
+        assert_eq!(builder.episodes, Some(vec![2, 3]));
+        assert_eq!(builder.tolerance_s, 1e-2);
+    }
+
+    #[test]
+    fn builder_accepts_empty_episodes() {
+        let builder = LeRobotDataset::builder("test/dataset").with_episodes(vec![]);
+        assert_eq!(builder.episodes, Some(vec![]));
+    }
+
+    #[test]
+    fn builder_returns_error_when_metadata_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let result = LeRobotDataset::builder("test/dataset")
+            .with_root(temp_dir.path())
+            .build();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    #[should_panic(expected = "Failed to load LeRobot dataset metadata")]
+    fn new_panics_when_metadata_missing() {
+        let temp_dir = tempfile::tempdir().unwrap();
+
+        LeRobotDataset::new(
+            "test/dataset",
+            Some(temp_dir.path().to_path_buf()),
+            None,
+            None,
+            None,
+            None,
+        );
+    }
 }
