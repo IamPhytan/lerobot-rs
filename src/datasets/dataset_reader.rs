@@ -42,6 +42,8 @@ pub struct DatasetReader {
     video_backend: Option<VideoBackend>,
     pub delta_indices: Option<DeltaIndices>,
     absolute_to_relative_idx: Option<HashMap<usize, usize>>,
+    // Relative paths resolved once for each selected episode and video key.
+    video_file_paths: HashMap<usize, HashMap<String, PathBuf>>,
 }
 
 impl DatasetReader {
@@ -74,6 +76,25 @@ impl DatasetReader {
             None => None,
         };
 
+        let video_keys = meta.video_keys();
+        let requested_episodes: HashSet<usize> = match &episodes {
+            Some(episodes) => episodes.iter().copied().collect(),
+            None => (0..meta.info.total_episodes).collect(),
+        };
+        let video_file_paths = requested_episodes
+            .into_iter()
+            .map(|ep_idx| {
+                let paths = video_keys
+                    .iter()
+                    .filter_map(|key| {
+                        meta.get_video_file_path(ep_idx, key)
+                            .map(|path| (key.clone(), path))
+                    })
+                    .collect();
+                (ep_idx, paths)
+            })
+            .collect();
+
         Self {
             meta,
             hf_dataset: None,
@@ -82,6 +103,7 @@ impl DatasetReader {
             video_backend,
             delta_indices,
             absolute_to_relative_idx: None,
+            video_file_paths,
         }
     }
 
@@ -186,8 +208,7 @@ impl DatasetReader {
         for ep_index in requested_episodes {
             for vid_key in self.meta.video_keys() {
                 let video_path = self.meta.root.join(
-                    self.meta
-                        .get_video_file_path(ep_index, vid_key.as_str())
+                    self.get_video_file_path(ep_index, vid_key.as_str())
                         .expect("Could not get video file path"),
                 );
                 if !video_path.exists() {
@@ -229,17 +250,12 @@ impl DatasetReader {
             .filter_map(|&ep_idx| self.meta.get_data_file_path(ep_idx))
             .collect::<Vec<PathBuf>>();
 
-        let video_fpaths = self
-            .meta
-            .video_keys()
-            .iter()
-            .flat_map(|vid_key| {
-                requested_episodes
-                    .iter()
-                    .filter_map(|&ep_idx| self.meta.get_video_file_path(ep_idx, vid_key))
-                    .collect::<Vec<PathBuf>>()
-            })
-            .collect::<Vec<PathBuf>>();
+        let video_fpaths = requested_episodes.iter().flat_map(|ep_idx| {
+            self.video_file_paths
+                .get(ep_idx)
+                .into_iter()
+                .flat_map(|paths| paths.values().cloned())
+        });
 
         fpaths.extend(video_fpaths);
 
@@ -395,6 +411,10 @@ impl DatasetReader {
         Ok(result)
     }
 
+    fn get_video_file_path(&self, ep_idx: usize, vid_key: &str) -> Option<&PathBuf> {
+        self.video_file_paths.get(&ep_idx)?.get(vid_key)
+    }
+
     fn query_videos(
         &self,
         query_timestamps: &HashMap<String, Vec<f64>>,
@@ -427,7 +447,6 @@ impl DatasetReader {
 
             // Get video file path for ep_idx and vid_key
             let video_rel_path = self
-                .meta
                 .get_video_file_path(ep_idx, vid_key)
                 .unwrap_or_else(|| {
                     panic!(
@@ -556,5 +575,179 @@ impl DatasetReader {
         }
 
         Ok(item)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::datasets::utils::{DatasetInfo, DatasetStats};
+    use polars::df;
+
+    fn reader(episodes: Option<Vec<usize>>, cameras: &[&str]) -> DatasetReader {
+        let features = cameras
+            .iter()
+            .map(|key| {
+                (
+                    key.to_string(),
+                    serde_json::json!({"dtype": "video", "shape": [3, 2, 2]}),
+                )
+            })
+            .collect::<HashMap<_, _>>();
+        let info: DatasetInfo = serde_json::from_value(serde_json::json!({
+            "codebase_version": "v3.0", "robot_type": "test",
+            "total_episodes": 3, "total_frames": 3, "total_tasks": 1,
+            "chunks_size": 1000, "data_files_size_in_mb": 100,
+            "video_files_size_in_mb": 100, "fps": 30.0, "splits": {},
+            "data_path": "data/chunk-{chunk_index:03d}/file-{file_index:03d}.parquet",
+            "video_path": "videos/{video_key}/chunk-{chunk_index:03d}/file-{file_index:03d}.mp4",
+            "features": features
+        }))
+        .unwrap();
+        let mut episode_meta = df!(
+            "episode_index" => [0u32, 1, 2],
+            "data/chunk_index" => [0u32, 0, 1],
+            "data/file_index" => [0u32, 1, 2]
+        )
+        .unwrap();
+        for (camera_idx, camera) in cameras.iter().enumerate() {
+            let columns = df!(
+                format!("videos/{camera}/chunk_index").as_str() => [0u32, 1, 2],
+                format!("videos/{camera}/file_index").as_str() => [camera_idx as u32, 10, 20],
+                format!("videos/{camera}/from_timestamp").as_str() => [0.0, 1.0, 2.0]
+            )
+            .unwrap();
+            episode_meta.hstack_mut(columns.get_columns()).unwrap();
+        }
+        let meta = LeRobotDatasetMetadata {
+            repo_id: "test/dataset".into(),
+            root: std::env::temp_dir().join(format!(
+                "lerobot-video-paths-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            )),
+            revision: "main".into(),
+            info,
+            tasks: df!("task" => ["test"]).unwrap(),
+            subtasks: None,
+            episodes: episode_meta,
+            stats: DatasetStats {
+                features: HashMap::new(),
+            },
+        };
+        DatasetReader::new(meta, episodes, 1e-4, None, None)
+    }
+
+    #[test]
+    fn video_paths_are_cached_per_episode_and_camera() {
+        let mut reader = reader(None, &["front", "wrist"]);
+        for ep_idx in 0..3 {
+            for key in ["front", "wrist"] {
+                assert_eq!(
+                    reader.get_video_file_path(ep_idx, key),
+                    reader.meta.get_video_file_path(ep_idx, key).as_ref()
+                );
+            }
+        }
+        assert_ne!(
+            reader.get_video_file_path(0, "front"),
+            reader.get_video_file_path(0, "wrist")
+        );
+        let before = reader.get_episodes_file_paths();
+        // Remove the source columns: subsequent path accesses must use the cache.
+        for key in ["front", "wrist"] {
+            for index in ["chunk_index", "file_index"] {
+                reader
+                    .meta
+                    .episodes
+                    .drop_in_place(&format!("videos/{key}/{index}"))
+                    .unwrap();
+            }
+        }
+        for _ in 0..2 {
+            for ep_idx in 0..3 {
+                for key in ["front", "wrist"] {
+                    assert!(reader.meta.get_video_file_path(ep_idx, key).is_none());
+                    // A missing file still reaches the decoder using the cached path.
+                    let err = reader
+                        .query_videos(&HashMap::from([(key.to_string(), vec![0.0])]), ep_idx)
+                        .unwrap_err();
+                    assert!(err.to_string().contains("Could not decode video frames"));
+                }
+            }
+        }
+        reader.hf_dataset = Some(
+            df!(
+                "episode_index" => [0u32, 2, 0],
+                "index" => [0u32, 2, 0],
+                "timestamp" => [0.0, 0.0, 0.0]
+            )
+            .unwrap(),
+        );
+        for idx in [0, 1, 2, 0] {
+            let err = reader.get_item(idx).unwrap_err();
+            assert!(err.to_string().contains("Could not decode video frames"));
+        }
+        assert_eq!(
+            before.into_iter().collect::<HashSet<_>>(),
+            reader.get_episodes_file_paths().into_iter().collect()
+        );
+    }
+
+    #[test]
+    fn video_paths_respect_explicit_episode_ids() {
+        let reader = reader(Some(vec![2, 0, 2]), &["front", "wrist"]);
+        assert_eq!(reader.video_file_paths.len(), 2);
+        assert!(reader.get_video_file_path(1, "front").is_none());
+        assert_eq!(
+            reader.get_video_file_path(2, "wrist"),
+            Some(&PathBuf::from("videos/wrist/chunk-002/file-020.mp4"))
+        );
+        let paths = reader.get_episodes_file_paths();
+        assert_eq!(paths.len(), 6);
+        assert!(!paths.contains(&PathBuf::from("data/chunk-000/file-001.parquet")));
+    }
+
+    #[test]
+    #[should_panic(expected = "Missing video file")]
+    fn cached_video_paths_still_validate_file_existence() {
+        let mut reader = reader(Some(vec![2]), &["front", "wrist"]);
+        reader.hf_dataset = Some(df!("episode_index" => [2u32]).unwrap());
+        for key in ["front", "wrist"] {
+            let path = reader
+                .meta
+                .root
+                .join(reader.get_video_file_path(2, key).unwrap());
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, []).unwrap();
+        }
+        // Only selected episodes need files, and both cameras are validated.
+        assert!(reader.check_cached_episodes_sufficient());
+        std::fs::remove_dir_all(&reader.meta.root).unwrap();
+        reader.check_cached_episodes_sufficient();
+    }
+
+    #[test]
+    #[should_panic(expected = "Could not get video file path")]
+    fn unresolved_video_paths_keep_validation_failure() {
+        let mut reader = reader(Some(vec![3]), &["front"]);
+        assert!(reader.get_video_file_path(3, "front").is_none());
+        reader.hf_dataset = Some(df!("episode_index" => [3u32]).unwrap());
+        reader.check_cached_episodes_sufficient();
+    }
+
+    #[test]
+    fn no_videos_or_no_selected_episodes_need_no_video_paths() {
+        let mut no_videos = reader(Some(vec![2]), &[]);
+        no_videos.hf_dataset = Some(df!("episode_index" => [2u32]).unwrap());
+        assert!(no_videos.check_cached_episodes_sufficient());
+        assert_eq!(no_videos.get_episodes_file_paths().len(), 1);
+
+        let empty = reader(Some(vec![]), &["front"]);
+        assert!(empty.video_file_paths.is_empty());
+        assert!(empty.get_episodes_file_paths().is_empty());
     }
 }
