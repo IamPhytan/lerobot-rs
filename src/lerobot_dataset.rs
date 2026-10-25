@@ -17,7 +17,7 @@ use std::{
 /// Manages the ``info.json``, ``stats.json``, ``tasks.parquet``, and ``episodes/`` parquet files that describe a dataset's structure, content, and statistics.
 #[derive(Debug, Clone)]
 pub struct LeRobotDatasetMetadata {
-    /// Repository identifier (e.g. ``'lerobot/aloha_sim'``).
+    /// Repository identifier (e.g. ``'lerobot/aloha_sim_insertion_human'``).
     pub repo_id: String,
     /// Local directory for the dataset. When omitted, existing local datasets are looked up under ``$HF_LEROBOT_HOME/{repo_id}``.
     pub root: PathBuf,
@@ -46,7 +46,7 @@ impl LeRobotDatasetMetadata {
     ///
     /// # Arguments
     ///
-    /// * `repo_id`: Repository identifier (e.g. ``'lerobot/aloha_sim'``).
+    /// * `repo_id`: Repository identifier (e.g. ``'lerobot/aloha_sim_insertion_human'``).
     /// * `root` - Local path to the dataset root directory.
     /// * `revision` - Git revision associated with the dataset (branch, tag, or commit hash). Optional, defaults to ``'main'``
     ///
@@ -326,10 +326,34 @@ impl LeRobotDatasetMetadata {
     }
 }
 
-/// Builder for creating a [`LeRobotDataset`] with optional configuration.
+/// Configures a [`LeRobotDataset`] before loading its metadata and data.
 ///
-/// Required: `repo_id`. All other options have the same defaults as
-/// [`LeRobotDataset::new`]. Loading is deferred until [`LeRobotDatasetBuilder::build`].
+/// Only the repository identifier (`repo_id`) is required.
+/// All other settings are optional and can be supplied through chainable `with_*` methods.
+///
+/// # Defaults
+///
+/// - `root`: `$HF_LEROBOT_HOME/{repo_id}` (resolved by `crate::lerobot_home()`).
+/// - `episodes`: all available episodes.
+/// - `delta_timestamps`: no temporal offsets.
+/// - `tolerance_s`: `1e-4` seconds.
+/// - `revision`: `"main"`.
+///
+/// The builder loads the data once [`LeRobotDatasetBuilder::build`] is called.
+/// For the equivalent constructor-based API, see [`LeRobotDataset::new`].
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// let dataset = LeRobotDataset::builder("lerobot/aloha_sim_insertion_human")
+///     .with_root("/datasets/aloha_sim_insertion_human")
+///     .with_episodes(vec![0, 1, 2])
+///     .with_tolerance_s(1e-3)
+///     .with_revision("main")
+///     .build()?;
+///
+/// println!("Loaded {} frames", dataset.len());
+/// ```
 pub struct LeRobotDatasetBuilder {
     repo_id: String,
     root: Option<PathBuf>,
@@ -340,7 +364,12 @@ pub struct LeRobotDatasetBuilder {
 }
 
 impl LeRobotDatasetBuilder {
-    /// Start configuring a local LeRobot dataset.
+    /// Creates a builder for the dataset identified by `repo_id`.
+    ///
+    /// This does not load metadata or dataset contents.
+    /// Call [`Self::build`] after setting any optional configuration.
+    ///
+    /// Prefer [`LeRobotDataset::builder`] as the public entry point.
     pub fn new(repo_id: impl Into<String>) -> Self {
         Self {
             repo_id: repo_id.into(),
@@ -382,10 +411,14 @@ impl LeRobotDatasetBuilder {
         self
     }
 
-    /// Load metadata, initialize the dataset reader, and return a dataset.
+    /// Load dataset metadata, initialize the reader, and construct the dataset.
+    ///
+    /// Metadata is loaded from `root/meta/` using [`LeRobotDatasetMetadata::try_new`].
+    ///
+    /// # Errors
     ///
     /// Returns [`FileError`] if metadata cannot be read or parsed.
-    /// Reader loading retains the existing `DatasetReader::try_load` behavior.
+    /// Reader loading is achieved using `DatasetReader::try_load`.
     pub fn build(self) -> Result<LeRobotDataset, FileError> {
         let root = self
             .root
@@ -416,7 +449,7 @@ impl LeRobotDatasetBuilder {
 /// This type provides access to the dataset metadata and initializes a reader for the selected episodes.
 #[derive(Debug)]
 pub struct LeRobotDataset {
-    /// Repository identifier (e.g. ``'lerobot/aloha_sim'``).
+    /// Repository identifier (e.g. ``'lerobot/aloha_sim_insertion_human'``).
     pub repo_id: String,
     /// Metadata associated with the dataset.
     pub meta: LeRobotDatasetMetadata,
@@ -431,7 +464,7 @@ impl LeRobotDataset {
     ///
     /// # Arguments
     ///
-    /// * `repo_id` - Repository identifier, e.g. `lerobot/aloha_sim`.
+    /// * `repo_id` - Repository identifier, e.g. `lerobot/aloha_sim_insertion_human`.
     /// * `root` - Local dataset directory. If `None`, defaults to
     ///   `$HF_LEROBOT_HOME/{repo_id}`.
     /// * `episodes` - If specified, this will only load episodes specified by their episode_index in this list. If `None`, all available
@@ -464,12 +497,15 @@ impl LeRobotDataset {
         .expect("Failed to load LeRobot dataset metadata")
     }
 
-    /// Configure a LeRobot dataset before reading its metadata or data.
+    /// Creates a [`LeRobotDatasetBuilder`] for configuring a dataset.
+    ///
+    /// Use the chainable `with_*` methods to customize the dataset and call [`LeRobotDatasetBuilder::build`] to load it.
+    /// Unlike [`Self::new`], `build` returns a [`Result`] for metadata loading failures.
     ///
     /// # Example
     ///
-    /// ```ignore
-    /// let dataset = LeRobotDataset::builder("lerobot/pusht")
+    /// ```rust,ignore
+    /// let dataset = LeRobotDataset::builder("lerobot/aloha_sim_insertion_human")
     ///     .with_episodes(vec![0, 1, 2])
     ///     .with_tolerance_s(1e-4)
     ///     .build()?;

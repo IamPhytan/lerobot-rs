@@ -35,18 +35,127 @@ This crate provides:
 
 ## Usage
 
-To use this library, simply add `lerobot` to your `Cargo.toml` file:
+To use the latest published release, add `lerobot` to your `Cargo.toml` file:
 
 ```toml
 [dependencies]
 lerobot = "0.5.1"
 ```
 
-Datasets are loaded from `$LEROBOT_HOME/<repo_id>` or, when `LEROBOT_HOME` is not set, `~/.cache/huggingface/lerobot/<repo_id>`.
+> **Builder availability:**
+> The `LeRobotDataset::builder()` API is currently only available on this repository's `main` branch and is not included in the published `0.5.1` release.
+> Until its publication, you can instead rely on a Git dependency:
+>
+> ```toml
+> [dependencies]
+> lerobot = { git = "https://github.com/IamPhytan/lerobot-rs", branch = "main" }
+> ```
+
+Datasets must already be stored locally.
+By default, they are loaded from `$LEROBOT_HOME/<repo_id>` or, when `LEROBOT_HOME` is not set, `~/.cache/huggingface/lerobot/<repo_id>`.
 
 ## Examples
 
 ### Loading a dataset
+
+Use `LeRobotDataset::builder()` to configure a dataset, and call `build()`
+when you are ready to load it:
+
+```rust
+use lerobot::LeRobotDataset;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let dataset = LeRobotDataset::builder("lerobot/pusht")
+        .build()?;
+
+    println!("Dataset: {}", dataset.repo_id);
+    println!("Root: {}", dataset.root().display());
+    println!("Frames: {}", dataset.len());
+    println!("Episodes: {}", dataset.num_episodes());
+    println!("FPS: {}", dataset.fps());
+
+    Ok(())
+}
+```
+
+### Builder configuration
+
+Select episodes or override the local dataset settings by chaining `with_*` methods:
+
+```rust
+use lerobot::LeRobotDataset;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let dataset = LeRobotDataset::builder("lerobot/pusht")
+        .with_root("/path/to/dataset")
+        .with_episodes(vec![0, 1, 2])
+        .with_tolerance_s(1e-3)
+        .with_revision("main")
+        .build()?;
+
+    println!("Loaded {} frames", dataset.len());
+    Ok(())
+}
+```
+
+Available options:
+
+| Method | Description | Default |
+| --- | --- | --- |
+| `with_root(path)` | Use a custom local dataset directory. | `$LEROBOT_HOME/<repo_id>` or the default cache path |
+| `with_episodes(indices)` | Read only the selected episode indices. | All episodes |
+| `with_delta_timestamps(offsets)` | Configure timestamp offsets for temporally related data. | No offsets |
+| `with_tolerance_s(seconds)` | Set the timestamp-matching tolerance in seconds. | `1e-4` |
+| `with_revision(revision)` | Set the metadata revision identifier. | `"main"` |
+
+`build()` returns a `Result<LeRobotDataset, FileError>` for metadata-loading errors.
+
+### Reading dataset items
+
+Dataset items can be accessed individually with `get_item()`:
+
+```rust
+use lerobot::LeRobotDataset;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let dataset = LeRobotDataset::builder("lerobot/pusht")
+        .with_episodes(vec![0])
+        .build()?;
+
+    let first = dataset.get_item(0)?;
+
+    for (feature, value) in first {
+        println!("{feature}: {value:?}");
+    }
+
+    Ok(())
+}
+```
+
+### Iterating over a dataset
+
+`LeRobotDataset` implements iteration by reference:
+
+```rust
+use lerobot::LeRobotDataset;
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let dataset = LeRobotDataset::builder("lerobot/pusht")
+        .build()?;
+
+    for item in &dataset {
+        let item = item?;
+        println!("{item:?}");
+    }
+
+    Ok(())
+}
+```
+
+### Using the legacy constructor
+
+You can also use `LeRobotDataset::new()` to instantiate a LeRobotDataset variable.
+Unlike the builder, it requires to specify all optional arguments:
 
 ```rust
 use lerobot::LeRobotDataset;
@@ -61,83 +170,7 @@ fn main() {
         None, // revision
     );
 
-    println!("Dataset: {}", dataset.repo_id);
-    println!("Root: {}", dataset.root().display());
-    println!("Frames: {}", dataset.len());
-    println!("Episodes: {}", dataset.num_episodes());
-    println!("FPS: {}", dataset.fps());
-}
-```
-
-A subset of episodes can be selected when loading a dataset:
-
-```rust
-use lerobot::LeRobotDataset;
-
-fn main() {
-    let dataset = LeRobotDataset::new(
-        "lerobot/pusht",
-        None,
-        Some(vec![0, 1, 2]),
-        None,
-        None,
-        None,
-    );
-
     println!("Loaded {} frames", dataset.len());
-}
-```
-
-### Reading dataset items
-
-Dataset items can be accessed individually or iterated over:
-
-```rust
-use lerobot::LeRobotDataset;
-
-fn main() {
-    let dataset = LeRobotDataset::new(
-        "lerobot/pusht",
-        None,
-        Some(vec![0]),
-        None,
-        None,
-        None,
-    );
-
-    let first = dataset
-        .get_item(0)
-        .expect("could not read dataset item");
-
-    for (feature, value) in first {
-        println!("{feature}: {value:?}");
-    }
-}
-```
-
-### Iterating over a dataset
-
-`LeRobotDataset` implements iteration by reference:
-
-```rust
-use lerobot::LeRobotDataset;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let dataset = LeRobotDataset::new(
-        "lerobot/pusht",
-        None,
-        None,
-        None,
-        None,
-        None,
-    );
-
-    for item in &dataset {
-        let item = item?;
-        println!("{item:?}");
-    }
-
-    Ok(())
 }
 ```
 
